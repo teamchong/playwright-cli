@@ -1,0 +1,59 @@
+{
+  "name": "playwright-cli",
+  "version": "1.0.0",
+  "description": "CLI tool for Playwright browser automation - connect to existing instances or launch new ones",
+  "main": "src/index.ts",
+  "module": "src/index.ts",
+  "bin": {
+    "playwright-cli": "./dist/index.js"
+  },
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "build:bun": "bun build src/index.ts --compile --outfile playwright-bun --external electron --external chromium-bidi",
+    "build:ts": "tsc -p tsconfig.build.json",
+    "build:node": "pkg dist/index.js --targets node18-macos-arm64 --output playwright",
+    "build": "pnpm run build:ts && pnpm run build:node",
+    "build:windows": "pnpm run build:ts && pkg dist/index.js --targets node18-win-x64 --output playwright.exe",
+    "build:linux": "pnpm run build:ts && pkg dist/index.js --targets node18-linux-x64 --output playwright",
+    "build:all": "pnpm run build:ts && pkg dist/index.js --targets node18-macos-arm64,node18-win-x64,node18-linux-x64 --output playwright",
+    "install": "pnpm run build && mkdir -p ~/.local/bin && cp playwright ~/.local/bin/",
+    "test": "bun test",
+    "test:coverage": "bun test --coverage",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "format": "prettier --write \"src/**/*.{ts,js,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,js,json}\"",
+    "typecheck": "tsc --noEmit --project tsconfig.json",
+    "ci": "npm run typecheck && npm run lint && npm run format:check && npm run test:coverage",
+    "semantic-release": "semantic-release"
+  },
+  "pkg": {
+    "scripts": "dist/**/*.js",
+    "targets": [
+      "node18-macos-arm64",
+      "node18-win-x64",
+      "node18-linux-x64"
+    ]
+  },
+  "dependencies": {
+    "@types/minimist": "^1.2.5",
+    "chalk": "^4.1.2",
+    "commander": "^12.0.0",
+    "minimist": "^1.2.8",
+    "ora": "^5.4.1",
+    "playwright": "^1.48.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.35.0",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
+    "@types/bun": "latest",
+    "@types/node": "^20.19.11",
+    "@typescript-eslint/eslint-plugin": "^8.43.0",
+    "@typescript-eslint/parser": "^8.43.0",
+    "eslint-plugin-import": "^2.32.0",
+    "pkg": "^5.8.1",
+    "semantic-release": "^22.0.12",
+    "typescript": "^5.9.2"
+  }
+}

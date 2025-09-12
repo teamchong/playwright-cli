@@ -1,0 +1,71 @@
+# Dependencies
+node_modules/
+bun.lockb
+
+# Build output
+dist/
+build/
+out/
+*.tsbuildinfo
+playwright
+playwright-cli
+*.bun-build
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+coverage/
+*.lcov
+.nyc_output/
+
+# Temporary files
+.tmp/
+tmp/
+temp/
+test-*.js
+test-*.ts
+test-fetch.js
+test-port.js
+
+# Session files
+.playwright-cli-session.json
+.playwright-cli-config.json
+
+# Cache
+.cache/
+.parcel-cache/
+.next/
+.nuxt/
+.turbo/
+
+# Playwright
+playwright-report/
+test-results/
+playwright/.cache/
+
+# Misc
+*.pid
+*.seed
+*.pid.lock
+.eslintcache
