@@ -1,12 +1,9 @@
+import { describe, it, expect, beforeEach, vi } from '../../__tests__/vitest-compat';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, unlinkSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
-
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-
 import { BrowserHelper } from '../browser-helper';
 import { SessionManager, type SessionData } from '../session-manager';
-
 import { createMockBrowser, createMockPage, createMockContext } from './test-helpers';
 
 vi.mock('fs');

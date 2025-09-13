@@ -3,13 +3,60 @@
 # Playwright CLI Installer
 set -e
 
-INSTALL_DIR="$HOME/.local/bin"
+# Determine installation directory
+if [ "${PLAYWRIGHT_SYSTEM_INSTALL:-}" = "true" ]; then
+    INSTALL_DIR="/usr/local/bin"
+elif [ "${PLAYWRIGHT_SYSTEM_INSTALL:-}" = "false" ]; then
+    INSTALL_DIR="$HOME/.local/bin"
+else
+    # Auto-detect best installation path
+    USER_DIR="$HOME/.local/bin"
+    SYSTEM_DIR="/usr/local/bin"
+    
+    echo "🎭 Playwright CLI Installer"
+    echo "==========================="
+    echo ""
+    
+    # Check if user dir is in PATH
+    if [[ ":$PATH:" == *":$USER_DIR:"* ]]; then
+        echo "✅ Found $USER_DIR in PATH - will install there (no sudo needed)"
+        INSTALL_DIR="$USER_DIR"
+        PLAYWRIGHT_SYSTEM_INSTALL=false
+    else
+        echo "⚠️  $USER_DIR is not in your PATH"
+        echo ""
+        echo "Choose installation location:"
+        echo "1) $SYSTEM_DIR (requires sudo, but works immediately)"
+        echo "2) $USER_DIR (no sudo, but you'll need to add to PATH)"
+        echo ""
+        read -p "Enter choice (1 or 2): " choice
+        
+        case $choice in
+            1)
+                INSTALL_DIR="$SYSTEM_DIR"
+                PLAYWRIGHT_SYSTEM_INSTALL=true
+                echo "→ Installing to $SYSTEM_DIR (will require sudo)"
+                ;;
+            2)
+                INSTALL_DIR="$USER_DIR"
+                PLAYWRIGHT_SYSTEM_INSTALL=false
+                echo "→ Installing to $USER_DIR (no sudo needed)"
+                ;;
+            *)
+                echo "Invalid choice, defaulting to user directory"
+                INSTALL_DIR="$USER_DIR"
+                PLAYWRIGHT_SYSTEM_INSTALL=false
+                ;;
+        esac
+    fi
+fi
+
 # Use environment variable if set, otherwise default to ~/.claude
 CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 
-echo "🎭 Playwright CLI Installer"
-echo "==========================="
-echo ""
+if [ -z "${PLAYWRIGHT_SYSTEM_INSTALL:-}" ]; then
+    echo ""
+fi
 
 # Check for Node.js (required for pkg compilation)
 if ! command -v node &> /dev/null; then
@@ -50,13 +97,22 @@ if [ ! -f "$SCRIPT_DIR/playwright" ]; then
 fi
 
 # Create directories
-mkdir -p "$INSTALL_DIR"
+if [ "$PLAYWRIGHT_SYSTEM_INSTALL" = "true" ]; then
+    sudo mkdir -p "$INSTALL_DIR"
+else
+    mkdir -p "$INSTALL_DIR"
+fi
 mkdir -p "$CLAUDE_DIR"
 
 # Install binary
 echo "📦 Installing to $INSTALL_DIR..."
-cp playwright "$INSTALL_DIR/"
-chmod +x "$INSTALL_DIR/playwright"
+if [ "$PLAYWRIGHT_SYSTEM_INSTALL" = "true" ]; then
+    sudo cp playwright "$INSTALL_DIR/"
+    sudo chmod +x "$INSTALL_DIR/playwright"
+else
+    cp playwright "$INSTALL_DIR/"
+    chmod +x "$INSTALL_DIR/playwright"
+fi
 
 # Update CLAUDE.md with Playwright CLI instructions
 echo ""
@@ -123,12 +179,56 @@ else
     echo "✅ Created CLAUDE.md with Playwright CLI instructions"
 fi
 
-# Check if PATH contains install directory
+# Check if PATH contains install directory and offer to add it
 if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
     echo ""
-    echo "⚠️  Add $INSTALL_DIR to your PATH:"
-    echo "    echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc"
-    echo "    source ~/.zshrc"
+    echo "⚠️  WARNING: $INSTALL_DIR is not in your PATH!"
+    echo ""
+    echo "The 'playwright' command will NOT work until it's in PATH."
+    echo ""
+    
+    # Detect shell config file
+    if [ -n "$ZSH_VERSION" ] || [ -f "$HOME/.zshrc" ]; then
+        SHELL_RC="$HOME/.zshrc"
+        SHELL_NAME="zsh"
+    elif [ -n "$BASH_VERSION" ] || [ -f "$HOME/.bashrc" ]; then
+        SHELL_RC="$HOME/.bashrc"
+        SHELL_NAME="bash"
+    elif [ -f "$HOME/.profile" ]; then
+        SHELL_RC="$HOME/.profile"
+        SHELL_NAME="sh"
+    else
+        SHELL_RC=""
+        SHELL_NAME="unknown"
+    fi
+    
+    if [ -n "$SHELL_RC" ]; then
+        echo "Would you like to add $INSTALL_DIR to your PATH automatically?"
+        read -p "This will modify $SHELL_RC (y/N): " add_to_path
+        
+        if [[ "$add_to_path" =~ ^[Yy]$ ]]; then
+            # Add to PATH in shell config
+            echo "" >> "$SHELL_RC"
+            echo "# Added by playwright-cli installer" >> "$SHELL_RC"
+            echo "export PATH=\"$INSTALL_DIR:\$PATH\"" >> "$SHELL_RC"
+            echo "✅ Added to $SHELL_RC"
+            echo ""
+            echo "Run this to update your current session:"
+            echo "    source $SHELL_RC"
+        else
+            echo ""
+            echo "To add manually, run:"
+            echo "    echo 'export PATH=\"$INSTALL_DIR:\$PATH\"' >> $SHELL_RC"
+            echo "    source $SHELL_RC"
+        fi
+    else
+        echo "To add to PATH, run:"
+        echo "    export PATH=\"$INSTALL_DIR:\$PATH\""
+    fi
+    
+    echo ""
+    echo "OR reinstall with system-wide installation (requires sudo):"
+    echo "    PLAYWRIGHT_SYSTEM_INSTALL=true ./install.sh"
 fi
 
 echo ""

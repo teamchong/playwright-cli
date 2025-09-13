@@ -17,23 +17,56 @@ A powerful command-line interface for Playwright browser automation. Connect to 
 
 ## Installation
 
+### Easy Installation (Recommended)
+
 ```bash
 # Clone the repository
 git clone https://github.com/yourusername/playwright-cli
 cd playwright-cli
 
+# Interactive installation (auto-detects best location)
+./install.sh
+# - If ~/.local/bin is in PATH: installs there (no sudo)
+# - Otherwise: asks if you want system-wide (/usr/local/bin with sudo) 
+#   or user-local (add to PATH manually)
+
+# Force user directory installation (no sudo, may need PATH setup)
+PLAYWRIGHT_SYSTEM_INSTALL=false ./install.sh
+
+# Force system-wide installation (requires sudo, works immediately)
+PLAYWRIGHT_SYSTEM_INSTALL=true ./install.sh
+```
+
+**Important:** For the `playwright` command to work, the binary must be in your PATH. The installer will guide you if PATH setup is needed.
+
+### Manual Installation
+
+```bash
 # Install dependencies (with pnpm, npm, or bun)
 pnpm install  # Recommended
 # or: npm install
 # or: bun install
 
+# Build the binary
+pnpm run build
+# or: npm run build
+
 # Install Playwright browsers (optional, for managed browsers)
 pnpm exec playwright install chromium
 # or: npx playwright install chromium
-
-# Create global symlink (optional)
-bun link
 ```
+
+### Uninstallation
+
+```bash
+# Remove from all installation paths (user and system)
+./uninstall.sh
+```
+
+The uninstall script will:
+- Stop any running playwright processes
+- Remove binaries from both `~/.local/bin` and `/usr/local/bin`
+- Clean up Claude Code configuration if present
 
 ## Usage
 

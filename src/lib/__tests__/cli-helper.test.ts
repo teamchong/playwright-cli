@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from '../../__tests__/vitest-compat';
 
 import { parseGlobalOptions, parseShorthand, checkTypos } from '../cli-helper';
 

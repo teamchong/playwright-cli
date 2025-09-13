@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from '../vitest-compat';
 
 import { IBrowserService, MockBrowserService } from '../../lib/browser-service';
 import { CommandBase } from '../../lib/command-base';

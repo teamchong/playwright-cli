@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from '../vitest-compat';
 
 import { SnapshotCommand } from '../../commands/snapshot-refactored';
 import { MockBrowserService } from '../../lib/browser-service';

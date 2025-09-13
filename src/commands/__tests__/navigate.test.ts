@@ -1,8 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-
+import { describe, it, expect, beforeEach, afterEach, vi } from '../../__tests__/vitest-compat';
 import { urlFixtures, errorFixtures } from '../../__tests__/fixtures/common-fixtures';
 import { createMockBrowser, createMockPage } from '../../lib/__tests__/test-helpers';
-
 import { CommandTestUtils, commandTestPatterns } from './command-test-utils';
 
 // Mock the navigate command module

@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { vi } from 'vitest';
+import { vi } from '../../__tests__/vitest-compat';
 
 import { createMockBrowser, createMockPage, testFixtures } from '../../lib/__tests__/test-helpers';
 

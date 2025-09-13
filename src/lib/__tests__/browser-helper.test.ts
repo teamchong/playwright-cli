@@ -1,10 +1,7 @@
+import { describe, it, expect, beforeEach, vi } from '../../__tests__/vitest-compat';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
-
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-
 import { BrowserHelper } from '../browser-helper';
-
 import { createMockBrowser, createMockPage, createMockContext, suppressConsole } from './test-helpers';
 
 vi.mock('playwright', () => ({

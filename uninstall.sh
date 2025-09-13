@@ -1,89 +1,78 @@
 #!/bin/bash
 
 # Playwright CLI Uninstaller
-# Removes all installed components and configurations
+# Removes playwright CLI from all possible installation paths
 
 set -e
-
-# Color codes for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
-
-INSTALL_DIR="$HOME/.local/bin"
-# Use environment variable if set, otherwise default to ~/.claude
-CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 
 echo "🗑️  Playwright CLI Uninstaller"
 echo "============================="
 echo ""
 
-# Track what was removed
-REMOVED_ITEMS=()
+# Define possible installation paths
+USER_BIN="$HOME/.local/bin"
+SYSTEM_BIN="/usr/local/bin"
+CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+CLAUDE_MD="$CLAUDE_DIR/CLAUDE.MD"
 
-# Remove binary
-if [ -f "$INSTALL_DIR/playwright" ]; then
-    rm -f "$INSTALL_DIR/playwright"
-    echo -e "${GREEN}✓${NC} Removed playwright binary"
-    REMOVED_ITEMS+=("Playwright CLI binary")
-else
-    echo -e "${YELLOW}⚠${NC} Binary not found at $INSTALL_DIR/playwright"
-fi
-
-# Remove from CLAUDE.md using markers
-echo ""
-echo "📝 Cleaning up CLAUDE.md..."
-if [ -f "$CLAUDE_DIR/CLAUDE.md" ]; then
-    # Check if section exists before trying to remove
-    if grep -q "<!-- BEGIN PLAYWRIGHT-CLI -->" "$CLAUDE_DIR/CLAUDE.md"; then
-        # Backup first
-        cp "$CLAUDE_DIR/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md.backup"
-        
-        # Remove section between markers
-        sed '/<!-- BEGIN PLAYWRIGHT-CLI -->/,/<!-- END PLAYWRIGHT-CLI -->/d' "$CLAUDE_DIR/CLAUDE.md.backup" > "$CLAUDE_DIR/CLAUDE.md.tmp"
+# Function to remove binary from a directory
+remove_binary() {
+    local dir="$1"
+    local use_sudo="$2"
     
-        # Clean up excessive blank lines (keep max 2 consecutive) and remove trailing blank lines
-        awk '
-            /^$/ { blank++; if (blank <= 2) lines[NR] = $0; next }
-            { 
-                for (i in lines) print lines[i]
-                delete lines
-                blank = 0
-                print 
-            }
-        ' "$CLAUDE_DIR/CLAUDE.md.tmp" > "$CLAUDE_DIR/CLAUDE.md"
-        
-        rm -f "$CLAUDE_DIR/CLAUDE.md.tmp"
-        echo -e "${GREEN}✓${NC} Removed Playwright CLI section from CLAUDE.md"
-        REMOVED_ITEMS+=("CLAUDE.md entry")
-    else
-        echo -e "${YELLOW}⚠${NC} PLAYWRIGHT-CLI section not found in CLAUDE.md (skipping)"
+    if [ -f "$dir/playwright" ]; then
+        echo "📋 Removing playwright from $dir..."
+        if [ "$use_sudo" = "true" ]; then
+            sudo rm -f "$dir/playwright"
+        else
+            rm -f "$dir/playwright"
+        fi
+        echo "✅ Removed from $dir"
     fi
-else
-    echo -e "${YELLOW}⚠${NC} CLAUDE.md not found"
+}
+
+# Stop any running instances
+if pgrep -f "playwright" > /dev/null 2>&1; then
+    echo "🛑 Stopping running playwright instances..."
+    pkill -f "playwright" 2>/dev/null || true
+    sleep 1
+    echo "✅ Stopped running instances"
 fi
 
-# Clean up any session files
-if ls ~/.playwright-cli-sessions/* >/dev/null 2>&1; then
-    rm -rf ~/.playwright-cli-sessions
-    echo -e "${GREEN}✓${NC} Removed saved sessions"
-    REMOVED_ITEMS+=("Saved sessions")
+# Remove from user directory (no sudo needed)
+remove_binary "$USER_BIN" false
+
+# Remove from system directory (requires sudo)
+if [ -f "$SYSTEM_BIN/playwright" ]; then
+    echo "📋 Removing playwright from $SYSTEM_BIN (requires sudo)..."
+    if sudo rm -f "$SYSTEM_BIN/playwright" 2>/dev/null; then
+        echo "✅ Removed from $SYSTEM_BIN"
+    else
+        echo "⚠️  Could not remove from $SYSTEM_BIN (permission denied)"
+        echo "   You may need to run: sudo rm -f $SYSTEM_BIN/playwright"
+    fi
 fi
 
-# Summary
-echo ""
-echo "═══════════════════════════════════════════"
-if [ ${#REMOVED_ITEMS[@]} -gt 0 ]; then
-    echo -e "${GREEN}✅ Uninstallation complete!${NC}"
-    echo ""
-    echo "Removed:"
-    for item in "${REMOVED_ITEMS[@]}"; do
-        echo "  • $item"
-    done
-else
-    echo -e "${YELLOW}⚠️  Nothing to remove - Playwright CLI was not installed${NC}"
+# Remove Playwright CLI section from CLAUDE.md
+if [ -f "$CLAUDE_MD" ]; then
+    echo "📝 Removing Playwright CLI instructions from CLAUDE.md..."
+    if grep -q "<!-- BEGIN PLAYWRIGHT-CLI -->" "$CLAUDE_MD"; then
+        # Create backup
+        cp "$CLAUDE_MD" "$CLAUDE_MD.backup"
+        
+        # Remove PLAYWRIGHT-CLI section
+        perl -0pe 's/\n*<!-- BEGIN PLAYWRIGHT-CLI -->.*?<!-- END PLAYWRIGHT-CLI -->\n*//gs' "$CLAUDE_MD.backup" > "$CLAUDE_MD.tmp"
+        
+        # Trim trailing newlines
+        perl -pi -e 'chomp if eof' "$CLAUDE_MD.tmp" 2>/dev/null || sed -i '' -e :a -e '/^\s*$/d;N;ba' "$CLAUDE_MD.tmp"
+        
+        mv "$CLAUDE_MD.tmp" "$CLAUDE_MD"
+        echo "✅ Removed Playwright CLI section from CLAUDE.md"
+    fi
 fi
+
 echo ""
-echo "To reinstall, run: ./install.sh"
-echo "═══════════════════════════════════════════"
+echo "✅ Uninstallation complete!"
+echo ""
+echo "Note: If you had playwright in your PATH, you may need to restart"
+echo "your terminal or run 'hash -r' to clear the command cache."

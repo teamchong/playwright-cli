@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from '../../__tests__/vitest-compat';
 
 import { BrowserHelper } from '../../lib/browser-helper';
 import * as refUtils from '../../lib/ref-utils';
