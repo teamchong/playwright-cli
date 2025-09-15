@@ -91,6 +91,15 @@ export const typeCommand = createCommand<TypeOptions>({
         }
       }
       
+      // Wait for element to exist first (fail fast if not found)
+
+      
+      await page.waitForSelector(actualSelector, { timeout: Math.min(timeout || 5000, 2000) });
+
+      
+      
+
+      
       if (clear) {
         await page.fill(actualSelector, text, { timeout });
       } else {

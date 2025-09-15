@@ -16,6 +16,6 @@
     "allowJs": true,
     "types": ["node", "vitest/globals"]
   },
-  "include": ["src/**/*", "vitest.config.mjs"],
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
 }

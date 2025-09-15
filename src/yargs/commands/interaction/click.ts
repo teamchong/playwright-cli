@@ -139,6 +139,12 @@ export const clickCommand = createCommand<ClickOptions>({
       if (double) {
         await page.dblclick(actualSelector, clickOptions);
       } else {
+        // Wait for element to exist first (fail fast if not found)
+
+        await page.waitForSelector(actualSelector, { timeout: Math.min(timeout || 5000, 2000) });
+
+        
+
         await page.click(actualSelector, clickOptions);
       }
     });

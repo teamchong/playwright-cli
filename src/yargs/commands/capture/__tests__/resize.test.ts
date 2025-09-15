@@ -33,8 +33,10 @@ describe('resize command - REAL TESTS', () => {
   }
 
   beforeAll(async () => {
-    // Build the CLI
-    execSync('pnpm build', { stdio: 'ignore' });
+    // Build the CLI only if needed
+    if (!require('fs').existsSync('dist/index.js')) {
+      execSync('pnpm build', { stdio: 'ignore' });
+    }
     
     // Clean up any existing browser
     try {

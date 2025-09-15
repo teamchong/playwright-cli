@@ -33,8 +33,10 @@ describe('back command - REAL TESTS', () => {
   }
 
   beforeAll(async () => {
-    // Build the CLI
-    execSync('pnpm build', { stdio: 'ignore' });
+    // Build the CLI only if needed
+    if (!require('fs').existsSync('dist/index.js')) {
+      execSync('pnpm build', { stdio: 'ignore' });
+    }
     
     // Clean up any existing browser
     try {
@@ -68,8 +70,9 @@ describe('back command - REAL TESTS', () => {
 
     it('should handle different port gracefully', () => {
       const { output, exitCode } = runCommand(`${CLI} back --port 8080`);
-      expect(exitCode).toBe(1);
-      expect(output).toContain('No browser running on port 8080');
+      // Back command auto-launches browser if none exists
+      expect(exitCode).toBe(0);
+      expect(output).toContain('Successfully navigated back');
     });
   });
 });
