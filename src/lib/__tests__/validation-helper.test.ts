@@ -2,7 +2,7 @@
  * Tests for validation helper utilities
  */
 
-import { describe, it, expect } from '../../__tests__/vitest-compat';
+import { describe, it, expect } from 'vitest';
 
 import { ValidationError } from '../validation';
 import { ValidationHelper, ValidationSchemaBuilder } from '../validation-helper';

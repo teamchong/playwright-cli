@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from '../../__tests__/vitest-compat';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import { BrowserHelper } from '../browser-helper';

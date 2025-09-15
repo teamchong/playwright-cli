@@ -56,17 +56,37 @@ pnpm exec playwright install chromium
 # or: npx playwright install chromium
 ```
 
+### Windows Installation
+
+```powershell
+# Run PowerShell as Administrator (optional, for system-wide install)
+# Clone the repository
+git clone https://github.com/yourusername/playwright-cli
+cd playwright-cli
+
+# Run the installer
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
 ### Uninstallation
 
+#### macOS/Linux
 ```bash
 # Remove from all installation paths (user and system)
 ./uninstall.sh
 ```
 
-The uninstall script will:
+#### Windows
+```powershell
+# Remove from all installation paths
+powershell -ExecutionPolicy Bypass -File uninstall.ps1
+```
+
+The uninstall scripts will:
 - Stop any running playwright processes
-- Remove binaries from both `~/.local/bin` and `/usr/local/bin`
-- Clean up Claude Code configuration if present
+- Remove binaries from installation directories
+- Clean up CLAUDE.md entries if present
+- Remove temporary files and state
 
 ## Usage
 

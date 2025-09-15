@@ -13,7 +13,7 @@ echo ""
 USER_BIN="$HOME/.local/bin"
 SYSTEM_BIN="/usr/local/bin"
 CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
-CLAUDE_MD="$CLAUDE_DIR/CLAUDE.MD"
+CLAUDE_MD="$CLAUDE_DIR/CLAUDE.md"
 
 # Function to remove binary from a directory
 remove_binary() {
@@ -56,15 +56,15 @@ fi
 # Remove Playwright CLI section from CLAUDE.md
 if [ -f "$CLAUDE_MD" ]; then
     echo "📝 Removing Playwright CLI instructions from CLAUDE.md..."
+    
+    # Remove the Playwright section between markers
     if grep -q "<!-- BEGIN PLAYWRIGHT-CLI -->" "$CLAUDE_MD"; then
-        # Create backup
-        cp "$CLAUDE_MD" "$CLAUDE_MD.backup"
-        
-        # Remove PLAYWRIGHT-CLI section
-        perl -0pe 's/\n*<!-- BEGIN PLAYWRIGHT-CLI -->.*?<!-- END PLAYWRIGHT-CLI -->\n*//gs' "$CLAUDE_MD.backup" > "$CLAUDE_MD.tmp"
-        
-        # Trim trailing newlines
-        perl -pi -e 'chomp if eof' "$CLAUDE_MD.tmp" 2>/dev/null || sed -i '' -e :a -e '/^\s*$/d;N;ba' "$CLAUDE_MD.tmp"
+        # Create temp file without the Playwright section
+        awk '
+            /<!-- BEGIN PLAYWRIGHT-CLI -->/ { skip = 1 }
+            /<!-- END PLAYWRIGHT-CLI -->/ { skip = 0; next }
+            !skip { print }
+        ' "$CLAUDE_MD" > "$CLAUDE_MD.tmp"
         
         mv "$CLAUDE_MD.tmp" "$CLAUDE_MD"
         echo "✅ Removed Playwright CLI section from CLAUDE.md"

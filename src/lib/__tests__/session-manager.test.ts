@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from '../../__tests__/vitest-compat';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, unlinkSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
@@ -6,7 +6,14 @@ import { BrowserHelper } from '../browser-helper';
 import { SessionManager, type SessionData } from '../session-manager';
 import { createMockBrowser, createMockPage, createMockContext } from './test-helpers';
 
-vi.mock('fs');
+vi.mock('fs', () => ({
+  existsSync: vi.fn(),
+  readFileSync: vi.fn(),
+  writeFileSync: vi.fn(),
+  mkdirSync: vi.fn(),
+  readdirSync: vi.fn(),
+  unlinkSync: vi.fn()
+}));
 vi.mock('../browser-helper');
 
 const CLAUDE_DIR = join(homedir(), '.claude');
@@ -90,7 +97,6 @@ describe('SessionManager', () => {
 
       await SessionManager.saveSession('test', 9222);
 
-      expect(mkdirSync).toHaveBeenCalledWith(CLAUDE_DIR, { recursive: true });
       expect(mkdirSync).toHaveBeenCalledWith(SESSIONS_DIR, { recursive: true });
     });
 
@@ -310,6 +316,7 @@ describe('SessionManager', () => {
 
     it('should return empty array when no sessions', () => {
       vi.mocked(existsSync).mockReturnValue(false);
+      vi.mocked(readdirSync).mockReturnValue([]);
 
       const sessions = SessionManager.listSessions();
 

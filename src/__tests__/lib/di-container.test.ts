@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from '../vitest-compat';
+import { describe, it, expect, beforeEach } from 'vitest';
 
 import { IBrowserService, MockBrowserService } from '../../lib/browser-service';
 import { DIContainer, SERVICE_TYPES, setupDefaultServices, setupTestServices, container } from '../../lib/di-container';

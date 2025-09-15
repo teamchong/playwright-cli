@@ -58,6 +58,20 @@ if [ -z "${PLAYWRIGHT_SYSTEM_INSTALL:-}" ]; then
     echo ""
 fi
 
+echo "🧹 Cleaning up old files..."
+# Clean up any old temporary playwright files
+if ls /tmp/playwright-*.sock >/dev/null 2>&1; then
+    rm -f /tmp/playwright-*.sock
+    echo "  ✓ Removed old socket files"
+fi
+
+# Clean up old state files
+if ls /tmp/playwright-state-*.json >/dev/null 2>&1; then
+    rm -f /tmp/playwright-state-*.json
+    echo "  ✓ Removed old state files"
+fi
+echo ""
+
 # Check for Node.js (required for pkg compilation)
 if ! command -v node &> /dev/null; then
     echo "❌ Error: Node.js is not installed"
@@ -104,14 +118,44 @@ else
 fi
 mkdir -p "$CLAUDE_DIR"
 
-# Install binary
+# Kill any running instances of the binary before copying
+if pgrep -f "playwright" > /dev/null 2>&1; then
+    echo "  Stopping running playwright instances..."
+    pkill -f "playwright" 2>/dev/null || true
+    sleep 0.5  # Give it time to terminate
+fi
+
+# Install binary using install command for better handling
 echo "📦 Installing to $INSTALL_DIR..."
-if [ "$PLAYWRIGHT_SYSTEM_INSTALL" = "true" ]; then
-    sudo cp playwright "$INSTALL_DIR/"
-    sudo chmod +x "$INSTALL_DIR/playwright"
+if command -v install &> /dev/null; then
+    if [ "$PLAYWRIGHT_SYSTEM_INSTALL" = "true" ]; then
+        sudo install -m 755 playwright "$INSTALL_DIR/"
+    else
+        install -m 755 playwright "$INSTALL_DIR/"
+    fi
 else
-    cp playwright "$INSTALL_DIR/"
-    chmod +x "$INSTALL_DIR/playwright"
+    # Fallback: remove existing file first if it exists
+    if [ "$PLAYWRIGHT_SYSTEM_INSTALL" = "true" ]; then
+        [ -f "$INSTALL_DIR/playwright" ] && sudo rm -f "$INSTALL_DIR/playwright"
+        sudo cp playwright "$INSTALL_DIR/"
+        sudo chmod +x "$INSTALL_DIR/playwright"
+    else
+        [ -f "$INSTALL_DIR/playwright" ] && rm -f "$INSTALL_DIR/playwright"
+        cp playwright "$INSTALL_DIR/"
+        chmod +x "$INSTALL_DIR/playwright"
+    fi
+fi
+
+# Test installation
+echo ""
+echo "🧪 Testing installation..."
+if "$INSTALL_DIR/playwright" --version &>/dev/null; then
+    VERSION=$("$INSTALL_DIR/playwright" --version 2>/dev/null || echo "unknown")
+    echo "✅ playwright binary works (version: $VERSION)"
+elif "$INSTALL_DIR/playwright" help &>/dev/null; then
+    echo "✅ playwright binary works"
+else
+    echo "⚠️  playwright binary may have issues - please test manually"
 fi
 
 # Update CLAUDE.md with Playwright CLI instructions

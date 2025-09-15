@@ -1,3 +1,6 @@
+import { tmpdir } from 'os';
+import { join } from 'path';
+
 /**
  * Common test fixtures for the Playwright CLI
  */
@@ -154,7 +157,7 @@ export const commandFixtures = {
   screenshot: {
     paths: [
       'screenshot.png',
-      '/tmp/test-screenshot.jpg',
+      join(tmpdir(), 'test-screenshot.jpg'),
       'outputs/page-capture.png'
     ],
     options: {

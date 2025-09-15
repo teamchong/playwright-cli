@@ -73,10 +73,39 @@ if (-not (Test-Path $binaryPath)) {
 }
 Write-Host "✅ Build complete" -ForegroundColor Green
 
+# Stop any running instances before installation
+$runningProcesses = Get-Process -Name "playwright" -ErrorAction SilentlyContinue
+if ($runningProcesses) {
+    Write-Host "  Stopping running playwright instances..." -ForegroundColor Yellow
+    Stop-Process -Name "playwright" -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 500
+}
+
 # Install binary
 Write-Host "📦 Installing to $INSTALL_DIR..." -ForegroundColor Yellow
 Copy-Item $binaryPath -Destination $INSTALL_DIR -Force
 Write-Host "✅ Binary installed" -ForegroundColor Green
+
+# Test installation
+Write-Host ""
+Write-Host "🧪 Testing installation..." -ForegroundColor Yellow
+$binaryInstalled = Join-Path $INSTALL_DIR $BINARY_NAME
+try {
+    $versionOutput = & $binaryInstalled --version 2>$null
+    if ($versionOutput) {
+        Write-Host "✅ playwright binary works (version: $versionOutput)" -ForegroundColor Green
+    } else {
+        # Try help command as fallback
+        $helpOutput = & $binaryInstalled help 2>$null
+        if ($helpOutput) {
+            Write-Host "✅ playwright binary works" -ForegroundColor Green
+        } else {
+            Write-Host "⚠️  playwright binary may have issues - please test manually" -ForegroundColor Yellow
+        }
+    }
+} catch {
+    Write-Host "⚠️  playwright binary may have issues - please test manually" -ForegroundColor Yellow
+}
 
 # Update CLAUDE.md
 Write-Host ""

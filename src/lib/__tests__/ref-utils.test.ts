@@ -1,4 +1,4 @@
-import { describe, it, expect } from '../../__tests__/vitest-compat';
+import { describe, it, expect } from 'vitest';
 
 import {
   generateRef,

@@ -3,12 +3,27 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from '
 import { homedir } from 'os';
 import { join } from 'path';
 
-import { describe, it, expect, beforeEach, afterEach, vi } from '../../__tests__/vitest-compat';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import { BrowserConfig, type BrowserType } from '../browser-config';
+import { PlatformHelper } from '../platform-helper';
 
-vi.mock('fs');
-vi.mock('child_process');
+vi.mock('fs', () => ({
+  existsSync: vi.fn(),
+  readFileSync: vi.fn(),
+  writeFileSync: vi.fn(),
+  mkdirSync: vi.fn(),
+  unlinkSync: vi.fn()
+}));
+vi.mock('child_process', () => ({
+  spawnSync: vi.fn()
+}));
+vi.mock('../platform-helper', () => ({
+  PlatformHelper: {
+    getClaudeDir: vi.fn(() => '/test/.claude'),
+    getOrCreateClaudeDir: vi.fn(() => '/test/.claude')
+  }
+}));
 vi.mock('playwright', () => ({
   chromium: {
     executablePath: vi.fn(() => '/path/to/chromium')
@@ -21,15 +36,15 @@ vi.mock('playwright', () => ({
   }
 }));
 
-const CLAUDE_DIR = join(homedir(), '.claude');
+const CLAUDE_DIR = '/test/.claude';
 const CONFIG_FILE = join(CLAUDE_DIR, 'playwright-config.json');
 const OLD_CONFIG_FILE = join(homedir(), '.playwright-cli-config.json');
 
 describe('BrowserConfig', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.clearAllMocks();
     // Reset config singleton
-    ;(BrowserConfig as any).config = null;
+    (BrowserConfig as any).config = null;
   });
 
   describe('loadConfig', () => {
@@ -39,7 +54,7 @@ describe('BrowserConfig', () => {
         browsersInstalled: true
       };
 
-      vi.mocked(existsSync).mockImplementation((path: string) => {
+      vi.mocked(existsSync).mockImplementation((path: any) => {
         return path === CONFIG_FILE;
       });
       vi.mocked(readFileSync).mockReturnValue(JSON.stringify(mockConfig));
@@ -56,7 +71,7 @@ describe('BrowserConfig', () => {
         browsersInstalled: false
       };
 
-      vi.mocked(existsSync).mockImplementation((path: string) => {
+      vi.mocked(existsSync).mockImplementation((path: any) => {
         return path === OLD_CONFIG_FILE;
       });
       vi.mocked(readFileSync).mockReturnValue(JSON.stringify(mockConfig));
@@ -88,7 +103,7 @@ describe('BrowserConfig', () => {
         browsersInstalled: true
       };
 
-      vi.mocked(existsSync).mockImplementation((path: string) => path === CONFIG_FILE);
+      vi.mocked(existsSync).mockImplementation((path: any) => path === CONFIG_FILE);
       vi.mocked(readFileSync).mockReturnValue(JSON.stringify(mockConfig));
 
       const config1 = await BrowserConfig.loadConfig();
@@ -119,7 +134,7 @@ describe('BrowserConfig', () => {
     });
 
     it('should create .claude directory if not exists', async () => {
-      vi.mocked(existsSync).mockImplementation((path: string) => {
+      vi.mocked(existsSync).mockImplementation((path: any) => {
         return path !== CLAUDE_DIR;
       });
       vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
@@ -129,7 +144,7 @@ describe('BrowserConfig', () => {
 
       await BrowserConfig.saveConfig({ defaultBrowser: 'firefox' });
 
-      expect(mkdirSync).toHaveBeenCalledWith(CLAUDE_DIR, { recursive: true });
+      expect(PlatformHelper.getOrCreateClaudeDir).toHaveBeenCalled();
     });
 
     it('should merge with existing config', async () => {
@@ -256,7 +271,7 @@ describe('BrowserConfig', () => {
     });
 
     it('should use default from config', async () => {
-      vi.mocked(existsSync).mockImplementation((path: string) => path === CONFIG_FILE);
+      vi.mocked(existsSync).mockImplementation((path: any) => path === CONFIG_FILE);
       vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
         defaultBrowser: 'firefox',
         browsersInstalled: true
@@ -271,7 +286,7 @@ describe('BrowserConfig', () => {
 
   describe('selectBrowser', () => {
     it('should return default browser', async () => {
-      vi.mocked(existsSync).mockImplementation((path: string) => path === CONFIG_FILE);
+      vi.mocked(existsSync).mockImplementation((path: any) => path === CONFIG_FILE);
       vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
         defaultBrowser: 'webkit',
         browsersInstalled: true
@@ -285,7 +300,7 @@ describe('BrowserConfig', () => {
 
   describe('getLastUsedBrowser', () => {
     it('should return last used browser', async () => {
-      vi.mocked(existsSync).mockImplementation((path: string) => path === CONFIG_FILE);
+      vi.mocked(existsSync).mockImplementation((path: any) => path === CONFIG_FILE);
       vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
         defaultBrowser: 'chromium',
         browsersInstalled: true,

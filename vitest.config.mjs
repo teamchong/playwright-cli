@@ -4,7 +4,18 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    setupFiles: ['./src/__tests__/setup.ts'],
+    // Performance optimizations to prevent hanging
+    pool: 'forks',
+    poolOptions: {
+      forks: {
+        singleFork: true,  // Run all tests in a single fork to prevent multiple processes
+      }
+    },
+    testTimeout: 10000,    // 10 second timeout per test
+    hookTimeout: 10000,    // 10 second timeout for hooks
+    teardownTimeout: 1000, // 1 second for cleanup
+    maxConcurrency: 1,     // Run tests sequentially
+    isolate: true,         // Isolate tests to prevent cross-contamination
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

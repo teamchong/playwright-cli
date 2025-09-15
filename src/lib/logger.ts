@@ -65,11 +65,14 @@ class Logger {
 
     this.winston = winston.createLogger({
       level: logLevel,
+      exitOnError: false, // Don't exit on error
       transports: [
         // Console output for CLI users
         new winston.transports.Console({
           format: cliFormat,
-          level: logLevel
+          level: logLevel,
+          handleExceptions: false,
+          handleRejections: false
         }),
 
         // Optional file logging (only if LOG_FILE is set)
@@ -127,6 +130,11 @@ class Logger {
         transport.level = level;
       }
     });
+  }
+
+  // Ensure clean shutdown
+  close(): void {
+    this.winston.end();
   }
 }
 
