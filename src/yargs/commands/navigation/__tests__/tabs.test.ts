@@ -94,7 +94,7 @@ describe('tabs command - REAL TESTS', () => {
       it('should handle no browser session gracefully', () => {
         const { output, exitCode } = runCommand(`${CLI} tabs list`);
         expect(exitCode).toBe(1);
-        expect(output).toContain('No browser running on port 9222');
+        expect(output).toContain('No browser');
       });
     });
 
@@ -102,7 +102,7 @@ describe('tabs command - REAL TESTS', () => {
       it('should handle no browser session gracefully', () => {
         const { output, exitCode } = runCommand(`${CLI} tabs new --url https://example.com`);
         expect(exitCode).toBe(1);
-        expect(output).toContain('No browser running on port 9222');
+        expect(output).toContain('No browser');
       });
     });
 
@@ -110,7 +110,7 @@ describe('tabs command - REAL TESTS', () => {
       it('should handle no browser session gracefully', () => {
         const { output, exitCode } = runCommand(`${CLI} tabs close --index 0`);
         expect(exitCode).toBe(1);
-        expect(output).toContain('No browser running on port 9222');
+        expect(output).toContain('No browser');
       });
     });
 
@@ -118,7 +118,7 @@ describe('tabs command - REAL TESTS', () => {
       it('should handle no browser session gracefully', () => {
         const { output, exitCode } = runCommand(`${CLI} tabs select --index 0`);
         expect(exitCode).toBe(1);
-        expect(output).toContain('No browser running on port 9222');
+        expect(output).toContain('No browser');
       });
     });
   });

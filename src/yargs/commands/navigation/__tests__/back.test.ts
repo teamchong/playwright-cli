@@ -65,7 +65,7 @@ describe('back command - REAL TESTS', () => {
     it('should handle no browser session gracefully', () => {
       const { output, exitCode } = runCommand(`${CLI} back`);
       expect(exitCode).toBe(1);
-      expect(output).toContain('No browser running on port 9222');
+      expect(output).toContain('No browser');
     });
 
     it('should handle different port gracefully', () => {

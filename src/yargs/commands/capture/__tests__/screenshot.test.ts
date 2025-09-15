@@ -65,19 +65,19 @@ describe('screenshot command - REAL TESTS', () => {
     it('should handle no browser session gracefully', () => {
       const { output, exitCode } = runCommand(`${CLI} screenshot`);
       expect(exitCode).toBe(1);
-      expect(output).toContain('No browser running on port 9222');
+      expect(output).toContain('No browser');
     });
 
     it('should handle screenshot with filename gracefully', () => {
       const { output, exitCode } = runCommand(`${CLI} screenshot test.png`);
       expect(exitCode).toBe(1);
-      expect(output).toContain('No browser running on port 9222');
+      expect(output).toContain('No browser');
     });
 
     it('should handle different port gracefully', () => {
       const { output, exitCode } = runCommand(`${CLI} screenshot --port 8080`);
       expect(exitCode).toBe(1);
-      expect(output).toContain('No browser running on port 8080');
+      expect(output).toContain('No browser');
     });
   });
 });

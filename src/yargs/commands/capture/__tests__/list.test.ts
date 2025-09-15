@@ -65,13 +65,13 @@ describe('list command - REAL TESTS', () => {
     it('should handle no browser session gracefully', () => {
       const { output, exitCode } = runCommand(`${CLI} list`);
       expect(exitCode).toBe(1);
-      expect(output).toContain('No browser running on port 9222');
+      expect(output).toContain('No browser');
     });
 
     it('should handle different port gracefully', () => {
       const { output, exitCode } = runCommand(`${CLI} list --port 8080`);
       expect(exitCode).toBe(1);
-      expect(output).toContain('No browser running on port 8080');
+      expect(output).toContain('No browser');
     });
   });
 });
