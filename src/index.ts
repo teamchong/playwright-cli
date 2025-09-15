@@ -26,4 +26,13 @@ if (process.argv[0] === 'bun' && process.argv[2]?.includes('playwright')) {
 }
 
 // Parse and execute the CLI
-cli.parse();
+cli
+  .parseAsync()
+  .then(() => {
+    // Ensure clean exit after successful command
+    process.exit(0);
+  })
+  .catch((err) => {
+    // Error already handled by yargs, just exit with error code
+    process.exit(1);
+  });

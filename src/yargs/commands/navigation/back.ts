@@ -37,17 +37,35 @@ export const backCommand = createCommand<NavigationHistoryOptions>({
     
     await BrowserHelper.withActivePage(argv.port, async (page) => {
       try {
-        await page.goBack();
+        // Start navigation back without waiting for completion
+        await Promise.race([
+          page.goBack({ waitUntil: 'domcontentloaded' }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Navigation timeout')), 3000))
+        ]);
       } catch (error: any) {
         // If goBack fails, it might be because there's no history
         if (error.message.includes('go back') || error.message.includes('history')) {
           throw new Error('Cannot navigate back - no previous page in history');
         }
-        throw error;
+        if (error.message.includes('timeout') || error.message.includes('Timeout')) {
+          // Navigation was initiated but timed out - that's OK
+          logger.warn('Navigation back initiated (may still be loading)');
+        } else {
+          throw error;
+        }
       }
       
-      const title = await page.title();
-      const url = page.url();
+      let title, url;
+      try {
+        title = await Promise.race([
+          page.title(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Title timeout')), 1000))
+        ]);
+        url = page.url();
+      } catch (error: any) {
+        title = 'Unknown';
+        url = 'about:blank';
+      }
       
       if (spinner) {
         spinner.succeed('Navigated back');
