@@ -41,11 +41,11 @@ jobs:
     - name: Run Prettier check
       run: pnpm run format:check
     
-    - name: Run tests with coverage
-      run: pnpm run test:coverage
-    
     - name: Build project
       run: pnpm run build:ts
+    
+    - name: Run tests with coverage
+      run: pnpm run test:coverage
     
     - name: Upload coverage reports
       uses: codecov/codecov-action@v4
