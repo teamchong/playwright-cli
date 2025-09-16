@@ -11,9 +11,11 @@ export default function setup() {
   console.log('🚀 Setting up browser for all tests...')
 
   try {
-    // Build the CLI first
-    console.log('📦 Building CLI...')
-    execSync('pnpm build', { stdio: 'inherit' })
+    // Build TypeScript first (skip in CI where build is a separate step)
+    if (!process.env.CI) {
+      console.log('📦 Building TypeScript...')
+      execSync('pnpm run build:ts', { stdio: 'inherit' })
+    }
 
     // Launch browser session
     console.log('🌐 Starting browser session...')
