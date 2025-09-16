@@ -4,7 +4,7 @@ import { homedir } from 'os';
 import { join } from 'path';
 import { BrowserHelper } from '../browser-helper';
 import { SessionManager, type SessionData } from '../session-manager';
-import { createMockBrowser, createMockPage, createMockContext } from './test-helpers';
+import { createMockBrowser, createMockPage, createMockContext } from './mock-helpers';
 
 vi.mock('fs', () => ({
   existsSync: vi.fn(),

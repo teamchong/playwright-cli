@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import { BrowserHelper } from '../browser-helper';
-import { createMockBrowser, createMockPage, createMockContext, suppressConsole } from './test-helpers';
+import { createMockBrowser, createMockPage, createMockContext, suppressConsole } from './mock-helpers';
 
 vi.mock('playwright', () => ({
   chromium: {
