@@ -206,9 +206,11 @@ export const networkCommand = createCommand<NetworkOptions>({
         // Handle graceful shutdown
         process.on('SIGINT', () => {
           if (argv.json) {
-            logger.info(JSON.stringify({ requests }, null, 2))
+            console.log(JSON.stringify({ requests }, null, 2))
+          } else {
+            console.log('\nStopped monitoring network')
           }
-          logger.info('\nStopped monitoring network')
+          process.exit(0)  // Actually exit the process!
         })
 
         // Keep monitoring until interrupted or timeout in tests

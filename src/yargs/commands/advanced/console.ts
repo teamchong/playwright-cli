@@ -152,9 +152,11 @@ export const consoleCommand = createCommand<ConsoleOptions>({
             // Handle graceful shutdown
             process.on('SIGINT', () => {
               if (argv.json && messages.length > 0) {
-                logger.info(JSON.stringify({ messages }, null, 2))
+                console.log(JSON.stringify({ messages }, null, 2))
+              } else {
+                console.log('\nStopped monitoring console')
               }
-              logger.info('\nStopped monitoring console')
+              process.exit(0)  // Actually exit the process!
             })
           }
         }
