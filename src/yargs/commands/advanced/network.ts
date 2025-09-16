@@ -174,20 +174,20 @@ export const networkCommand = createCommand<NetworkOptions>({
         requests.push(failureInfo)
       })
 
-      // Get tab ID for reference  
+      // Get tab ID for reference
       const tabId = BrowserHelper.getPageId(page)
-      
+
       // Capture current network state and exit immediately
       // Wait briefly to capture any active requests (500ms)
       await new Promise(resolve => setTimeout(resolve, 500))
-      
+
       if (argv.json) {
         logger.json({
           success: true,
           tabId,
           requests,
           count: requests.length,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         })
       } else {
         logger.success(`✅ Network snapshot for tab: ${tabId}`)
@@ -198,8 +198,15 @@ export const networkCommand = createCommand<NetworkOptions>({
           requests.slice(0, 10).forEach(req => {
             const method = req.request?.method || 'GET'
             const status = req.response?.status
-            const statusColor = status >= 400 ? chalk.red : status >= 300 ? chalk.yellow : chalk.green
-            logger.info(`  ${method} ${req.url} ${status ? statusColor(status) : ''}`);
+            const statusColor =
+              status >= 400
+                ? chalk.red
+                : status >= 300
+                  ? chalk.yellow
+                  : chalk.green
+            logger.info(
+              `  ${method} ${req.url} ${status ? statusColor(status) : ''}`
+            )
           })
           if (requests.length > 10) {
             logger.info(`  ... and ${requests.length - 10} more`)

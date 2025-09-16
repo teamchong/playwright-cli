@@ -105,7 +105,7 @@ export const consoleCommand = createCommand<ConsoleOptions>({
 
           // Get tab ID for reference
           const tabId = BrowserHelper.getPageId(page)
-          
+
           // Trigger a console message to capture any buffered messages
           try {
             await page.evaluate('console.log("Playwright CLI snapshot")')
@@ -117,7 +117,9 @@ export const consoleCommand = createCommand<ConsoleOptions>({
           await new Promise(resolve => setTimeout(resolve, 500))
 
           // Filter out our own test message
-          const filteredMessages = messages.filter(m => m.text !== 'Playwright CLI snapshot')
+          const filteredMessages = messages.filter(
+            m => m.text !== 'Playwright CLI snapshot'
+          )
 
           if (argv.json) {
             logger.json({
@@ -125,7 +127,7 @@ export const consoleCommand = createCommand<ConsoleOptions>({
               tabId,
               messages: filteredMessages,
               count: filteredMessages.length,
-              timestamp: new Date().toISOString()
+              timestamp: new Date().toISOString(),
             })
           } else {
             logger.success(`✅ Console snapshot for tab: ${tabId}`)
