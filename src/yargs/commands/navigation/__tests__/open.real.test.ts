@@ -96,4 +96,24 @@ describe('open command - REAL INTEGRATION TEST', () => {
     // Should have errored
     expect(errorOccurred).toBe(true)
   })
+
+  it('should handle connection refused errors gracefully', () => {
+    let errorOccurred = false
+    let errorMessage = ''
+    try {
+      execSync(`${CLI_PATH} open http://localhost:32838`, {
+        encoding: 'utf8',
+        stdio: 'pipe',
+      })
+    } catch (error: any) {
+      errorOccurred = true
+      errorMessage = error.stdout || error.stderr || ''
+      // Should show a user-friendly error message instead of throwing
+      expect(errorMessage).toContain('Connection failed')
+      expect(errorMessage).not.toContain('Error: Browser connection failed')
+    }
+
+    // Should handle gracefully, not throw unhandled errors
+    expect(errorOccurred).toBe(true)
+  })
 })

@@ -6,6 +6,7 @@
 
 import { createCommand } from '../../lib/command-builder'
 import { BrowserHelper } from '../../../lib/browser-helper'
+import { logger } from '../../../lib/logger'
 import type { OpenOptions } from '../../types'
 
 /**
@@ -235,9 +236,20 @@ export const openCommand = createCommand<OpenOptions>({
       })
     } catch (error: any) {
       if (spinner) {
-        spinner.fail('Failed to open browser')
+        // Check if it's a connection refused error and provide user-friendly message
+        if (error.message && error.message.includes('ERR_CONNECTION_REFUSED')) {
+          spinner.fail('Connection failed - no server running at the specified URL')
+        } else {
+          spinner.fail('Failed to open browser')
+        }
       }
-      throw new Error(`Browser connection failed: ${error.message}`)
+      
+      // Throw a custom error with user-friendly message for connection refused
+      if (error.message && error.message.includes('ERR_CONNECTION_REFUSED')) {
+        throw new Error('Connection failed - make sure a server is running at the target URL')
+      } else {
+        throw new Error(`Browser connection failed: ${error.message}`)
+      }
     }
   },
 
