@@ -14,9 +14,6 @@ jobs:
       image: mcr.microsoft.com/playwright:v1.48.0-jammy
     
     steps:
-    - name: Install system dependencies for Bun
-      run: apt-get update && apt-get install -y unzip
-    
     - name: Checkout repository
       uses: actions/checkout@v4
     
@@ -31,15 +28,8 @@ jobs:
         node-version: 20
         cache: 'pnpm'
     
-    - name: Setup Bun
-      uses: oven-sh/setup-bun@v1
-      with:
-        bun-version: latest
-    
     - name: Install dependencies
-      run: |
-        bun install
-        pnpm install
+      run: pnpm install
     
     - name: TypeScript type checking
       run: pnpm run typecheck
@@ -52,7 +42,7 @@ jobs:
       run: pnpm run format:check
     
     - name: Run tests with coverage
-      run: bun test --coverage
+      run: pnpm run test:coverage
     
     - name: Build project
       run: pnpm run build:ts
@@ -67,7 +57,7 @@ jobs:
     
     - name: Check coverage thresholds
       run: |
-        bun test --coverage --reporter=json > coverage.json
+        pnpm run test:coverage -- --reporter=json > coverage.json
         node -e "
           const coverage = require('./coverage.json');
           const thresholds = { branches: 80, functions: 80, lines: 80, statements: 80 };
@@ -163,22 +153,12 @@ jobs:
         node-version: 20
         cache: 'pnpm'
     
-    - name: Setup Bun
-      uses: oven-sh/setup-bun@v1
-      with:
-        bun-version: latest
-    
     - name: Install dependencies
-      run: |
-        bun install
-        pnpm install
+      run: pnpm install
     
     - name: Build for production
       run: pnpm run build:ts
     
-    - name: Build Bun executable (Unix)
-      if: runner.os != 'Windows'
-      run: pnpm run build:bun
     
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
@@ -186,6 +166,5 @@ jobs:
         name: build-${{ matrix.os }}
         path: |
           dist/
-          playwright-bun
           playwright
         retention-days: 30
