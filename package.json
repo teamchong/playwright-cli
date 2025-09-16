@@ -25,7 +25,7 @@
     "format": "prettier --write \"src/**/*.{ts,js,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,js,json}\"",
     "typecheck": "tsc --noEmit --project tsconfig.json",
-    "ci": "npm run typecheck && npm run lint && npm run format:check && npm run test:coverage",
+    "ci": "pnpm run typecheck && pnpm run lint && pnpm run format:check && pnpm run test:coverage",
     "semantic-release": "semantic-release"
   },
   "pkg": {

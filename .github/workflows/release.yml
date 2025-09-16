@@ -28,7 +28,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
+          cache: 'pnpm'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
@@ -36,17 +41,19 @@ jobs:
           bun-version: latest
 
       - name: Install dependencies
-        run: bun install
+        run: |
+          bun install
+          pnpm install
 
       - name: Run quality checks
         run: |
-          bun run typecheck
-          bun run lint
-          bun run format:check
-          bun run test:coverage
+          pnpm run typecheck
+          pnpm run lint
+          pnpm run format:check
+          pnpm run test:coverage
 
       - name: Build project
-        run: bun run build:ts
+        run: pnpm run build:ts
 
       - name: Release
         env:
