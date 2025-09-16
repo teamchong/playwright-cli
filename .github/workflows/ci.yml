@@ -36,6 +36,9 @@ jobs:
         bun install
         pnpm install
     
+    - name: Install Playwright browsers
+      run: pnpm exec playwright install chromium
+    
     - name: TypeScript type checking
       run: pnpm run typecheck
     
