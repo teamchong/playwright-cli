@@ -44,7 +44,7 @@ coverage/
 tmp/
 temp/
 test-*.js
-test-*.ts
+/test-*.ts
 test-fetch.js
 test-port.js
 
