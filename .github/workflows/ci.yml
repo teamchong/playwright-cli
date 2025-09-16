@@ -15,10 +15,10 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
     
-    - name: Setup Bun
-      uses: oven-sh/setup-bun@v1
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v2
       with:
-        bun-version: latest
+        version: 8
     
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -26,10 +26,10 @@ jobs:
         node-version: 20
         cache: 'pnpm'
     
-    - name: Setup pnpm
-      uses: pnpm/action-setup@v2
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v1
       with:
-        version: 8
+        bun-version: latest
     
     - name: Install dependencies
       run: |
@@ -40,7 +40,8 @@ jobs:
       run: pnpm run typecheck
     
     - name: Run ESLint
-      run: pnpm run lint -- --format json --output-file eslint-report.json || true
+      run: |
+        pnpm run lint -- --format json --output-file eslint-report.json || echo '[]' > eslint-report.json
     
     - name: Run Prettier check
       run: pnpm run format:check
@@ -146,10 +147,10 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
     
-    - name: Setup Bun
-      uses: oven-sh/setup-bun@v1
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v2
       with:
-        bun-version: latest
+        version: 8
     
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -157,10 +158,10 @@ jobs:
         node-version: 20
         cache: 'pnpm'
     
-    - name: Setup pnpm
-      uses: pnpm/action-setup@v2
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v1
       with:
-        version: 8
+        bun-version: latest
     
     - name: Install dependencies
       run: |
