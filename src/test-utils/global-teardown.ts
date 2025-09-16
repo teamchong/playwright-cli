@@ -14,7 +14,14 @@ export default function teardown() {
     console.log('🗂️  Closing test tabs...')
     TabManager.cleanupAllCreatedTabs()
 
-    // Close browser if it's still running
+    // Skip browser close in CI (Playwright handles it)
+    if (process.env.CI) {
+      console.log('ℹ️  Running in CI - Playwright handles browser cleanup')
+      console.log('✅ Cleanup complete')
+      return
+    }
+
+    // Close browser if it's still running (local only)
     console.log('🌐 Closing browser session...')
     try {
       TabManager.runCommand('node dist/src/index.js close', 5000)

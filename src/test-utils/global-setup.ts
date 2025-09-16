@@ -17,7 +17,15 @@ export default function setup() {
       execSync('pnpm run build:ts', { stdio: 'inherit' })
     }
 
-    // Launch browser session
+    // In CI, use Playwright's browser which is already available
+    if (process.env.CI) {
+      console.log('ℹ️  Running in CI - using Playwright browser')
+      // Clear any existing tab tracking
+      TabManager.clearTracking()
+      return
+    }
+
+    // Launch browser session for local development
     console.log('🌐 Starting browser session...')
     const { output, exitCode } = TabManager.runCommand(
       'node dist/src/index.js open',
