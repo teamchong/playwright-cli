@@ -1,95 +1,100 @@
 /**
  * Fill Command - Yargs Implementation
- * 
+ *
  * Fills multiple form fields with values using Playwright's page.fill() method.
  * Accepts selector=value pairs to fill multiple fields in one command.
  */
 
-import { createCommand } from '../../lib/command-builder';
-import { BrowserHelper } from '../../../lib/browser-helper';
-import type { FillOptions } from '../../types';
+import { createCommand } from '../../lib/command-builder'
+import { BrowserHelper } from '../../../lib/browser-helper'
+import type { FillOptions } from '../../types'
 
 export const fillCommand = createCommand<FillOptions>({
   metadata: {
     name: 'fill',
     category: 'interaction',
     description: 'Fill form fields with values',
-    aliases: []
+    aliases: [],
   },
-  
+
   command: 'fill <fields...>',
   describe: 'Fill form fields with values',
-  
-  builder: (yargs) => {
+
+  builder: yargs => {
     return yargs
       .positional('fields', {
-        describe: 'Field selector=value pairs (e.g., "#email=test@example.com" "#password=secret")',
+        describe:
+          'Field selector=value pairs (e.g., "#email=test@example.com" "#password=secret")',
         type: 'string',
         array: true,
-        demandOption: true
+        demandOption: true,
       })
       .option('port', {
         describe: 'Chrome debugging port',
         type: 'number',
         default: 9222,
-        alias: 'p'
+        alias: 'p',
       })
       .option('timeout', {
         describe: 'Timeout in milliseconds',
         type: 'number',
-        default: 5000
+        default: 5000,
       })
       .option('tab-index', {
         describe: 'Target specific tab by index (0-based)',
         type: 'number',
-        alias: 'tab'
+        alias: 'tab',
       })
       .option('tab-id', {
         describe: 'Target specific tab by unique ID',
-        type: 'string'
+        type: 'string',
       })
-      .conflicts('tab-index', 'tab-id');
+      .conflicts('tab-index', 'tab-id')
   },
-  
+
   handler: async ({ argv, logger, spinner }) => {
-    const { fields, port, timeout } = argv;
-    const tabIndex = argv['tab-index'] as number | undefined;
-    const tabId = argv['tab-id'] as string | undefined;
-    
-    const tabTarget = tabIndex !== undefined ? ` in tab ${tabIndex}` : 
-                     tabId !== undefined ? ` in tab ${tabId.slice(0, 8)}...` : '';
-    
+    const { fields, port, timeout } = argv
+    const tabIndex = argv['tab-index'] as number | undefined
+    const tabId = argv['tab-id'] as string | undefined
+
+    const tabTarget =
+      tabIndex !== undefined
+        ? ` in tab ${tabIndex}`
+        : tabId !== undefined
+          ? ` in tab ${tabId.slice(0, 8)}...`
+          : ''
+
     if (spinner) {
-      spinner.text = `Filling ${fields.length} field(s)${tabTarget}...`;
+      spinner.text = `Filling ${fields.length} field(s)${tabTarget}...`
     }
-    
-    let filledCount = 0;
-    const errors: string[] = [];
-    
-    await BrowserHelper.withTargetPage(port, tabIndex, tabId, async (page) => {
+
+    let filledCount = 0
+    const errors: string[] = []
+
+    await BrowserHelper.withTargetPage(port, tabIndex, tabId, async page => {
       for (const field of fields) {
-        const [selector, ...valueParts] = field.split('=');
-        const value = valueParts.join('='); // Handle values with = in them
-        
+        const [selector, ...valueParts] = field.split('=')
+        const value = valueParts.join('=') // Handle values with = in them
+
         if (!selector || !value) {
-          errors.push(`Invalid field format: ${field}. Use selector=value`);
-          continue;
+          errors.push(`Invalid field format: ${field}. Use selector=value`)
+          continue
         }
-        
+
         try {
-          await page.fill(selector, value, { timeout: timeout as number });
-          logger.info(`  ✓ Filled ${selector} with "${value}"`);
-          filledCount++;
+          await page.fill(selector, value, { timeout: timeout as number })
+          logger.info(`  ✓ Filled ${selector} with "${value}"`)
+          filledCount++
         } catch (err: any) {
-          errors.push(`Failed to fill ${selector}: ${err.message}`);
+          errors.push(`Failed to fill ${selector}: ${err.message}`)
         }
       }
-    });
-    
+    })
+
     if (errors.length > 0) {
-      errors.forEach(error => logger.warn(`  ⚠️  ${error}`));
+      errors.forEach(error => logger.warn(`  ⚠️  ${error}`))
     }
-    
-    logger.success(`Filled ${filledCount} field(s)${tabTarget}`);
-  }
-});
+
+    logger.success(`Filled ${filledCount} field(s)${tabTarget}`)
+  },
+})

@@ -1,83 +1,91 @@
 /**
  * Eval Command - Yargs Implementation
- * 
+ *
  * Executes JavaScript expressions in the browser context and returns results.
  * Supports JSON output formatting for complex objects.
  */
 
-import { createCommand } from '../../lib/command-builder';
-import { BrowserHelper } from '../../../lib/browser-helper';
-import { logger } from '../../../lib/logger';
-import type { EvalOptions } from '../../types';
+import { createCommand } from '../../lib/command-builder'
+import { BrowserHelper } from '../../../lib/browser-helper'
+import { logger } from '../../../lib/logger'
+import type { EvalOptions } from '../../types'
 
 export const evalCommand = createCommand<EvalOptions>({
   metadata: {
     name: 'eval',
     category: 'advanced',
     description: 'Execute JavaScript in the browser',
-    aliases: ['execute']
+    aliases: ['execute'],
   },
-  
+
   command: 'eval <expression>',
   describe: 'Execute JavaScript in the browser',
-  
-  builder: (yargs) => {
+
+  builder: yargs => {
     return yargs
       .positional('expression', {
         describe: 'JavaScript code to execute',
         type: 'string',
-        demandOption: true
+        demandOption: true,
       })
       .option('port', {
         describe: 'Chrome debugging port',
         type: 'number',
         default: 9222,
-        alias: 'p'
+        alias: 'p',
       })
       .option('json', {
         describe: 'Output result as JSON',
         type: 'boolean',
-        default: false
+        default: false,
       })
       .option('timeout', {
         describe: 'Timeout in milliseconds',
         type: 'number',
-        default: 30000
+        default: 30000,
       })
       .option('tab-index', {
         describe: 'Target specific tab by index (0-based)',
         type: 'number',
-        alias: 'tab'
+        alias: 'tab',
       })
       .option('tab-id', {
         describe: 'Target specific tab by unique ID',
-        type: 'string'
+        type: 'string',
       })
       .conflicts('tab-index', 'tab-id')
       .example('$0 eval "document.title"', 'Get the page title')
-      .example('$0 eval "Array.from(document.querySelectorAll(\'a\')).map(a => a.href)" --json', 'Get all links as JSON');
+      .example(
+        '$0 eval "Array.from(document.querySelectorAll(\'a\')).map(a => a.href)" --json',
+        'Get all links as JSON'
+      )
   },
-  
-  handler: async (context) => {
+
+  handler: async context => {
     try {
-      const { argv, logger } = context;
-      const tabIndex = argv['tab-index'] as number | undefined;
-      const tabId = argv['tab-id'] as string | undefined;
-      
-      await BrowserHelper.withTargetPage(argv.port, tabIndex, tabId, async (page) => {
-        // Execute the JavaScript expression
-        const result = await page.evaluate(argv.expression);
-        
-        // Format output based on options
-        if (argv.json) {
-          logger.info(JSON.stringify(result, null, 2));
-        } else {
-          logger.info(String(result));
+      const { argv, logger } = context
+      const tabIndex = argv['tab-index'] as number | undefined
+      const tabId = argv['tab-id'] as string | undefined
+
+      await BrowserHelper.withTargetPage(
+        argv.port,
+        tabIndex,
+        tabId,
+        async page => {
+          // Execute the JavaScript expression
+          const result = await page.evaluate(argv.expression)
+
+          // Format output based on options
+          if (argv.json) {
+            logger.info(JSON.stringify(result, null, 2))
+          } else {
+            logger.info(String(result))
+          }
         }
-      });
+      )
     } catch (error: any) {
-      logger.commandError(`Evaluation failed: ${error.message}`);
-      throw new Error("Command failed");
+      logger.commandError(`Evaluation failed: ${error.message}`)
+      throw new Error('Command failed')
     }
-  }
-});
+  },
+})

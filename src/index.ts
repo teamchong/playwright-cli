@@ -18,11 +18,11 @@
  * @version 1.0.0
  */
 
-import { cli } from './yargs/cli';
+import { cli } from './yargs/cli'
 
 // Fix for Bun compiled binaries: remove the extra argv entry
 if (process.argv[0] === 'bun' && process.argv[2]?.includes('playwright')) {
-  process.argv.splice(2, 1);
+  process.argv.splice(2, 1)
 }
 
 // Parse and execute the CLI
@@ -30,9 +30,9 @@ cli
   .parseAsync()
   .then(() => {
     // Ensure clean exit after successful command
-    process.exit(0);
+    process.exit(0)
   })
-  .catch((err) => {
+  .catch(err => {
     // Error already handled by yargs, just exit with error code
-    process.exit(1);
-  });
+    process.exit(1)
+  })

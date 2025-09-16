@@ -3,20 +3,25 @@
  * Provides a simple API to add validation without major refactoring
  */
 
-import { Sanitizers } from './decorators';
-import { logger } from './logger';
-import { ValidationUtils, Validators, ValidationError, ValidatorFunction } from './validation';
+import { Sanitizers } from './decorators'
+import { logger } from './logger'
+import {
+  ValidationUtils,
+  Validators,
+  ValidationError,
+  ValidatorFunction,
+} from './validation'
 
 export interface ParameterValidationRule {
-  name: string;
-  validators: ValidatorFunction[];
-  sanitizer?: (value: any) => any;
-  required?: boolean;
+  name: string
+  validators: ValidatorFunction[]
+  sanitizer?: (value: any) => any
+  required?: boolean
 }
 
 export interface ValidationHelperOptions {
-  throwOnError?: boolean;
-  logErrors?: boolean;
+  throwOnError?: boolean
+  logErrors?: boolean
 }
 
 /**
@@ -29,76 +34,85 @@ export class ValidationHelper {
   static validateCommandParams(
     params: Record<string, any>,
     options: ValidationHelperOptions = {}
-  ): { isValid: boolean; errors: string[]; sanitizedParams: Record<string, any> } {
-    const { throwOnError = false, logErrors = false } = options;
-    const validationSchema: Record<string, ValidatorFunction[]> = {};
-    const sanitizedParams: Record<string, any> = { ...params };
-    const allErrors: string[] = [];
+  ): {
+    isValid: boolean
+    errors: string[]
+    sanitizedParams: Record<string, any>
+  } {
+    const { throwOnError = false, logErrors = false } = options
+    const validationSchema: Record<string, ValidatorFunction[]> = {}
+    const sanitizedParams: Record<string, any> = { ...params }
+    const allErrors: string[] = []
 
     // Auto-detect and validate common parameters
     for (const [key, value] of Object.entries(params)) {
       switch (key) {
-      case 'url':
-        validationSchema[key] = [Validators.url({ required: true })];
-        // URL validator handles normalization internally
-        break;
+        case 'url':
+          validationSchema[key] = [Validators.url({ required: true })]
+          // URL validator handles normalization internally
+          break
 
-      case 'port':
-        validationSchema[key] = [Validators.port({ required: false })];
-        // Port validator handles number conversion internally
-        break;
+        case 'port':
+          validationSchema[key] = [Validators.port({ required: false })]
+          // Port validator handles number conversion internally
+          break
 
-      case 'timeout':
-        validationSchema[key] = [Validators.timeout({ required: false })];
-        // Timeout validator handles number conversion internally
-        break;
+        case 'timeout':
+          validationSchema[key] = [Validators.timeout({ required: false })]
+          // Timeout validator handles number conversion internally
+          break
 
-      case 'selector':
-        validationSchema[key] = [Validators.selector({ required: true })];
-        // Selector validator handles trimming internally
-        break;
+        case 'selector':
+          validationSchema[key] = [Validators.selector({ required: true })]
+          // Selector validator handles trimming internally
+          break
 
-      case 'waitUntil':
-        const waitOptions = ['load', 'domcontentloaded', 'networkidle'];
-        validationSchema[key] = [Validators.enum(waitOptions, { required: false })];
-        break;
+        case 'waitUntil':
+          const waitOptions = ['load', 'domcontentloaded', 'networkidle']
+          validationSchema[key] = [
+            Validators.enum(waitOptions, { required: false }),
+          ]
+          break
 
-      default:
-        // No automatic validation for unknown parameters
-        break;
+        default:
+          // No automatic validation for unknown parameters
+          break
       }
     }
 
     if (Object.keys(validationSchema).length > 0) {
-      const { isValid, errors, sanitizedData } = ValidationUtils.validateObject(params, validationSchema);
+      const { isValid, errors, sanitizedData } = ValidationUtils.validateObject(
+        params,
+        validationSchema
+      )
 
       if (!isValid) {
-        const errorMessages = Object.entries(errors)
-          .flatMap(([field, fieldErrors]) =>
+        const errorMessages = Object.entries(errors).flatMap(
+          ([field, fieldErrors]) =>
             fieldErrors.map(error => `${field}: ${error}`)
-          );
-        allErrors.push(...errorMessages);
+        )
+        allErrors.push(...errorMessages)
       }
 
       // Use sanitized data from validators
-      Object.assign(sanitizedParams, sanitizedData);
+      Object.assign(sanitizedParams, sanitizedData)
     }
 
     if (allErrors.length > 0) {
       if (logErrors) {
-        logger.error(`Validation errors: ${allErrors.join(', ')}`);
+        logger.error(`Validation errors: ${allErrors.join(', ')}`)
       }
 
       if (throwOnError) {
-        throw new ValidationError(allErrors);
+        throw new ValidationError(allErrors)
       }
     }
 
     return {
       isValid: allErrors.length === 0,
       errors: allErrors,
-      sanitizedParams
-    };
+      sanitizedParams,
+    }
   }
 
   /**
@@ -108,127 +122,131 @@ export class ValidationHelper {
     params: Record<string, any>,
     rules: ParameterValidationRule[],
     options: ValidationHelperOptions = {}
-  ): { isValid: boolean; errors: string[]; sanitizedParams: Record<string, any> } {
-    const { throwOnError = false, logErrors = false } = options;
-    const validationSchema: Record<string, ValidatorFunction[]> = {};
-    const sanitizedParams: Record<string, any> = { ...params };
+  ): {
+    isValid: boolean
+    errors: string[]
+    sanitizedParams: Record<string, any>
+  } {
+    const { throwOnError = false, logErrors = false } = options
+    const validationSchema: Record<string, ValidatorFunction[]> = {}
+    const sanitizedParams: Record<string, any> = { ...params }
 
     // Apply custom rules
     for (const rule of rules) {
-      validationSchema[rule.name] = rule.validators;
+      validationSchema[rule.name] = rule.validators
 
       if (rule.sanitizer && params[rule.name] !== undefined) {
-        sanitizedParams[rule.name] = rule.sanitizer(params[rule.name]);
+        sanitizedParams[rule.name] = rule.sanitizer(params[rule.name])
       }
     }
 
     const { isValid, errors, sanitizedData } = ValidationUtils.validateObject(
       params,
       validationSchema
-    );
+    )
 
     // Merge sanitized data
-    Object.assign(sanitizedParams, sanitizedData);
+    Object.assign(sanitizedParams, sanitizedData)
 
-    const allErrors = Object.entries(errors)
-      .flatMap(([field, fieldErrors]) =>
-        fieldErrors.map(error => `${field}: ${error}`)
-      );
+    const allErrors = Object.entries(errors).flatMap(([field, fieldErrors]) =>
+      fieldErrors.map(error => `${field}: ${error}`)
+    )
 
     if (allErrors.length > 0) {
       if (logErrors) {
-        logger.error(`Validation errors: ${allErrors.join(', ')}`);
+        logger.error(`Validation errors: ${allErrors.join(', ')}`)
       }
 
       if (throwOnError) {
-        throw new ValidationError(allErrors);
+        throw new ValidationError(allErrors)
       }
     }
 
     return {
       isValid: allErrors.length === 0,
       errors: allErrors,
-      sanitizedParams
-    };
+      sanitizedParams,
+    }
   }
 
   /**
    * Quick selector validation (most common use case)
    */
   static validateSelector(selector: string, required = true): string {
-    const result = Validators.selector({ required })(selector, 'selector');
+    const result = Validators.selector({ required })(selector, 'selector')
 
     if (!result.isValid) {
-      throw new ValidationError(result.errors);
+      throw new ValidationError(result.errors)
     }
 
-    return Sanitizers.trim(result.sanitizedValue || selector);
+    return Sanitizers.trim(result.sanitizedValue || selector)
   }
 
   /**
    * Quick URL validation (common for navigate commands)
    */
   static validateUrl(url: string, required = true): string {
-    const result = Validators.url({ required })(url, 'url');
+    const result = Validators.url({ required })(url, 'url')
 
     if (!result.isValid) {
-      throw new ValidationError(result.errors);
+      throw new ValidationError(result.errors)
     }
 
-    return Sanitizers.normalizeUrl(result.sanitizedValue || url);
+    return Sanitizers.normalizeUrl(result.sanitizedValue || url)
   }
 
   /**
    * Quick port validation
    */
   static validatePort(port: string | number, required = false): number {
-    const result = Validators.port({ required })(port, 'port');
+    const result = Validators.port({ required })(port, 'port')
 
     if (!result.isValid) {
-      throw new ValidationError(result.errors);
+      throw new ValidationError(result.errors)
     }
 
-    return result.sanitizedValue || parseInt(String(port), 10);
+    return result.sanitizedValue || parseInt(String(port), 10)
   }
 
   /**
    * Quick timeout validation
    */
   static validateTimeout(timeout: string | number, required = false): number {
-    const result = Validators.timeout({ required })(timeout, 'timeout');
+    const result = Validators.timeout({ required })(timeout, 'timeout')
 
     if (!result.isValid) {
-      throw new ValidationError(result.errors);
+      throw new ValidationError(result.errors)
     }
 
-    return result.sanitizedValue || parseInt(String(timeout), 10);
+    return result.sanitizedValue || parseInt(String(timeout), 10)
   }
 
   /**
    * Validate boolean flags (common for command options)
    */
-  static validateBooleans(
-    booleanParams: Record<string, any>
-  ): { isValid: boolean; errors: string[] } {
-    const errors: string[] = [];
+  static validateBooleans(booleanParams: Record<string, any>): {
+    isValid: boolean
+    errors: string[]
+  } {
+    const errors: string[] = []
 
     for (const [key, value] of Object.entries(booleanParams)) {
       if (value !== undefined && typeof value !== 'boolean') {
-        errors.push(`${key}: Must be a boolean value`);
+        errors.push(`${key}: Must be a boolean value`)
       }
     }
 
     return {
       isValid: errors.length === 0,
-      errors
-    };
+      errors,
+    }
   }
 
   /**
    * Create a validation schema builder for fluent API
    */
   static createSchema(): ValidationSchemaBuilder {
-    return new ValidationSchemaBuilder();
+    return new ValidationSchemaBuilder()
   }
 }
 
@@ -236,16 +254,16 @@ export class ValidationHelper {
  * Fluent API for building validation schemas
  */
 export class ValidationSchemaBuilder {
-  private rules: ParameterValidationRule[] = [];
+  private rules: ParameterValidationRule[] = []
 
   url(name: string, required = true, message?: string): this {
     this.rules.push({
       name,
       validators: [Validators.url({ required, message })],
       sanitizer: Sanitizers.normalizeUrl,
-      required
-    });
-    return this;
+      required,
+    })
+    return this
   }
 
   port(name: string, required = false, message?: string): this {
@@ -253,9 +271,9 @@ export class ValidationSchemaBuilder {
       name,
       validators: [Validators.port({ required, message })],
       sanitizer: Sanitizers.toNumber,
-      required
-    });
-    return this;
+      required,
+    })
+    return this
   }
 
   timeout(name: string, required = false, message?: string): this {
@@ -263,9 +281,9 @@ export class ValidationSchemaBuilder {
       name,
       validators: [Validators.timeout({ required, message })],
       sanitizer: Sanitizers.toNumber,
-      required
-    });
-    return this;
+      required,
+    })
+    return this
   }
 
   selector(name: string, required = true, message?: string): this {
@@ -273,49 +291,70 @@ export class ValidationSchemaBuilder {
       name,
       validators: [Validators.selector({ required, message })],
       sanitizer: Sanitizers.trim,
-      required
-    });
-    return this;
+      required,
+    })
+    return this
   }
 
-  enum<T>(name: string, allowedValues: T[], required = false, message?: string): this {
+  enum<T>(
+    name: string,
+    allowedValues: T[],
+    required = false,
+    message?: string
+  ): this {
     this.rules.push({
       name,
       validators: [Validators.enum(allowedValues, { required, message })],
-      required
-    });
-    return this;
+      required,
+    })
+    return this
   }
 
-  string(name: string, minLength = 0, maxLength = Infinity, required = false, message?: string): this {
+  string(
+    name: string,
+    minLength = 0,
+    maxLength = Infinity,
+    required = false,
+    message?: string
+  ): this {
     this.rules.push({
       name,
-      validators: [Validators.string(minLength, maxLength, { required, message })],
+      validators: [
+        Validators.string(minLength, maxLength, { required, message }),
+      ],
       sanitizer: Sanitizers.trim,
-      required
-    });
-    return this;
+      required,
+    })
+    return this
   }
 
-  custom(name: string, validators: ValidatorFunction[], sanitizer?: (value: any) => any): this {
+  custom(
+    name: string,
+    validators: ValidatorFunction[],
+    sanitizer?: (value: any) => any
+  ): this {
     this.rules.push({
       name,
       validators,
       sanitizer,
-      required: false
-    });
-    return this;
+      required: false,
+    })
+    return this
   }
 
   build(): ParameterValidationRule[] {
-    return [...this.rules];
+    return [...this.rules]
   }
 
   validate(
     params: Record<string, any>,
     options: ValidationHelperOptions = {}
-  ): { isValid: boolean; errors: string[]; sanitizedParams: Record<string, any> } {
-    return ValidationHelper.validateWithRules(params, this.build(), options);
+  ): {
+    isValid: boolean
+    errors: string[]
+    sanitizedParams: Record<string, any>
+  } {
+    return ValidationHelper.validateWithRules(params, this.build(), options)
   }
 }
 
@@ -327,16 +366,24 @@ export function WithValidation<T extends new (...args: any[]) => {}>(Base: T) {
     protected validateParams(
       params: Record<string, any>,
       options: ValidationHelperOptions = { throwOnError: true }
-    ): { isValid: boolean; errors: string[]; sanitizedParams: Record<string, any> } {
-      return ValidationHelper.validateCommandParams(params, options);
+    ): {
+      isValid: boolean
+      errors: string[]
+      sanitizedParams: Record<string, any>
+    } {
+      return ValidationHelper.validateCommandParams(params, options)
     }
 
     protected validateWithRules(
       params: Record<string, any>,
       rules: ParameterValidationRule[],
       options: ValidationHelperOptions = { throwOnError: true }
-    ): { isValid: boolean; errors: string[]; sanitizedParams: Record<string, any> } {
-      return ValidationHelper.validateWithRules(params, rules, options);
+    ): {
+      isValid: boolean
+      errors: string[]
+      sanitizedParams: Record<string, any>
+    } {
+      return ValidationHelper.validateWithRules(params, rules, options)
     }
-  };
+  }
 }

@@ -1,6 +1,6 @@
 /**
  * Command Builder Pattern for Yargs Commands
- * 
+ *
  * This module provides a standardized way to create Yargs commands with:
  * - Consistent error handling
  * - Logging utilities
@@ -9,43 +9,45 @@
  * - Type safety
  */
 
-import type { CommandModule, ArgumentsCamelCase, Argv } from 'yargs';
-import chalk from 'chalk';
-import ora, { Ora } from 'ora';
-import { BrowserHelper } from '../../lib/browser-helper';
-import { logger } from '../../lib/logger';
-import type { 
-  BaseCommandOptions, 
-  PlaywrightCommand, 
+import type { CommandModule, ArgumentsCamelCase, Argv } from 'yargs'
+import chalk from 'chalk'
+import ora, { Ora } from 'ora'
+import { BrowserHelper } from '../../lib/browser-helper'
+import { logger } from '../../lib/logger'
+import type {
+  BaseCommandOptions,
+  PlaywrightCommand,
   CommandHandler,
   CommandMetadata,
   CommandResult,
-  Logger
-} from '../types';
+  Logger,
+} from '../types'
 
 /**
  * Command execution context that's passed to handlers
  */
-export interface CommandContext<T extends BaseCommandOptions = BaseCommandOptions> {
-  argv: ArgumentsCamelCase<T>;
-  spinner?: Ora;
-  logger: Logger;
-  startTime: number;
+export interface CommandContext<
+  T extends BaseCommandOptions = BaseCommandOptions,
+> {
+  argv: ArgumentsCamelCase<T>
+  spinner?: Ora
+  logger: Logger
+  startTime: number
 }
 
 /**
  * Options for creating a command
  */
 export interface CreateCommandOptions<T extends BaseCommandOptions> {
-  metadata: CommandMetadata;
-  command: string;
-  describe: string;
-  builder: (yargs: Argv) => Argv<T> | { [key: string]: any };
-  handler: (context: CommandContext<T>) => Promise<void>;
-  middleware?: Array<(argv: ArgumentsCamelCase<T>) => void | Promise<void>>;
-  validateArgs?: (argv: ArgumentsCamelCase<T>) => void | string;
-  requiresBrowser?: boolean;
-  supportsJson?: boolean;
+  metadata: CommandMetadata
+  command: string
+  describe: string
+  builder: (yargs: Argv) => Argv<T> | { [key: string]: any }
+  handler: (context: CommandContext<T>) => Promise<void>
+  middleware?: Array<(argv: ArgumentsCamelCase<T>) => void | Promise<void>>
+  validateArgs?: (argv: ArgumentsCamelCase<T>) => void | string
+  requiresBrowser?: boolean
+  supportsJson?: boolean
 }
 
 /**
@@ -54,112 +56,113 @@ export interface CreateCommandOptions<T extends BaseCommandOptions> {
 export function createCommand<T extends BaseCommandOptions>(
   options: CreateCommandOptions<T>
 ): PlaywrightCommand<T> {
-  const { 
-    metadata, 
-    command, 
-    describe, 
-    builder, 
-    handler, 
+  const {
+    metadata,
+    command,
+    describe,
+    builder,
+    handler,
     middleware = [],
     validateArgs,
     requiresBrowser = true,
-    supportsJson = true
-  } = options;
+    supportsJson = true,
+  } = options
 
   return {
     command,
     describe,
     aliases: metadata.aliases,
-    
+
     builder: (yargs: Argv) => {
       // Apply the custom builder
-      const built = typeof builder === 'function' ? builder(yargs) : yargs.options(builder);
-      
+      const built =
+        typeof builder === 'function' ? builder(yargs) : yargs.options(builder)
+
       // Add category for help grouping
-      return built.group([], `${metadata.category} Commands:`);
+      return built.group([], `${metadata.category} Commands:`)
     },
-    
+
     handler: async (argv: ArgumentsCamelCase<T>) => {
-      const startTime = Date.now();
-      let spinner: Ora | undefined;
-      
+      const startTime = Date.now()
+      let spinner: Ora | undefined
+
       try {
         // Run middleware
         for (const mw of middleware) {
-          await mw(argv);
+          await mw(argv)
         }
-        
+
         // Validate arguments if validator provided
         if (validateArgs) {
-          const error = validateArgs(argv);
+          const error = validateArgs(argv)
           if (error) {
-            throw new Error(error);
+            throw new Error(error)
           }
         }
-        
+
         // Create logger based on output preferences
-        const commandLogger = createLogger(argv);
-        
+        const commandLogger = createLogger(argv)
+
         // Create spinner if not in quiet or json mode
         if (!argv.quiet && !argv.json) {
-          spinner = ora();
+          spinner = ora()
         }
-        
+
         // Create context
         const context: CommandContext<T> = {
           argv,
           spinner,
           logger: commandLogger,
-          startTime
-        };
-        
+          startTime,
+        }
+
         // Execute the handler
-        await handler(context);
-        
+        await handler(context)
+
         // Debug: log that handler completed
         if (process.env.DEBUG) {
-          console.log('[DEBUG] Handler completed, exiting...');
+          console.log('[DEBUG] Handler completed, exiting...')
         }
-        
+
         // Success - stop spinner if running
         if (spinner?.isSpinning) {
-          spinner.succeed();
+          spinner.succeed()
         }
-        
+
         // Log execution time in verbose mode
         if (argv.verbose) {
-          const duration = Date.now() - startTime;
-          commandLogger.debug(`Command completed in ${duration}ms`);
+          const duration = Date.now() - startTime
+          commandLogger.debug(`Command completed in ${duration}ms`)
         }
-        
+
         // Success - handler completed without throwing
       } catch (error: any) {
         // Error handling
         if (spinner?.isSpinning) {
-          spinner.fail();
+          spinner.fail()
         }
-        
+
         if (argv.json && supportsJson) {
           // Output error as JSON
           const result: CommandResult = {
             success: false,
-            error: error.message
-          };
-          console.log(JSON.stringify(result, null, 2));
+            error: error.message,
+          }
+          console.log(JSON.stringify(result, null, 2))
         } else {
           // Output error to stderr
-          console.error(chalk.red('Error:'), error.message);
-          
+          console.error(chalk.red('Error:'), error.message)
+
           if (argv.verbose && error.stack) {
-            console.error(chalk.gray(error.stack));
+            console.error(chalk.gray(error.stack))
           }
         }
-        
+
         // Re-throw the error for yargs to handle
-        throw error;
+        throw error
       }
-    }
-  };
+    },
+  }
 }
 
 /**
@@ -169,40 +172,40 @@ export function createLogger(argv: BaseCommandOptions): Logger {
   return {
     info: (message: string) => {
       if (!argv.quiet && !argv.json) {
-        console.log(message);
+        console.log(message)
       }
     },
-    
+
     success: (message: string) => {
       if (!argv.quiet && !argv.json) {
-        console.log(chalk.green('✅'), message);
+        console.log(chalk.green('✅'), message)
       }
     },
-    
+
     error: (message: string) => {
       if (!argv.json) {
-        console.error(chalk.red('❌'), message);
+        console.error(chalk.red('❌'), message)
       }
     },
-    
+
     warn: (message: string) => {
       if (!argv.quiet && !argv.json) {
-        console.warn(chalk.yellow('⚠️'), message);
+        console.warn(chalk.yellow('⚠️'), message)
       }
     },
-    
+
     debug: (message: string) => {
       if (argv.verbose && !argv.json) {
-        console.log(chalk.gray('[DEBUG]'), message);
+        console.log(chalk.gray('[DEBUG]'), message)
       }
     },
-    
+
     json: (data: any) => {
       if (argv.json) {
-        console.log(JSON.stringify(data, null, 2));
+        console.log(JSON.stringify(data, null, 2))
       }
-    }
-  };
+    },
+  }
 }
 
 /**
@@ -214,70 +217,70 @@ export const validators = {
    */
   isValidUrl: (url: string): boolean => {
     try {
-      new URL(url);
-      return true;
+      new URL(url)
+      return true
     } catch {
-      return false;
+      return false
     }
   },
-  
+
   /**
    * Validates that a port number is valid
    */
   isValidPort: (port: number): boolean => {
-    return Number.isInteger(port) && port > 0 && port <= 65535;
+    return Number.isInteger(port) && port > 0 && port <= 65535
   },
-  
+
   /**
    * Validates that a selector is not empty
    */
   isValidSelector: (selector: string): boolean => {
-    return Boolean(selector && selector.trim().length > 0);
+    return Boolean(selector && selector.trim().length > 0)
   },
-  
+
   /**
    * Validates file path exists (for upload commands, etc.)
    */
   fileExists: async (path: string): Promise<boolean> => {
-    const fs = await import('fs/promises');
+    const fs = await import('fs/promises')
     try {
-      await fs.access(path);
-      return true;
+      await fs.access(path)
+      return true
     } catch {
-      return false;
+      return false
     }
-  }
-};
+  },
+}
 
 /**
  * Helper to create a browser-based command
  */
 export function createBrowserCommand<T extends BaseCommandOptions>(
   options: Omit<CreateCommandOptions<T>, 'requiresBrowser'> & {
-    browserHandler: (page: any, context: CommandContext<T>) => Promise<void>;
+    browserHandler: (page: any, context: CommandContext<T>) => Promise<void>
   }
 ): PlaywrightCommand<T> {
-  const { browserHandler, ...rest } = options;
-  
+  const { browserHandler, ...rest } = options
+
   return createCommand({
     ...rest,
     requiresBrowser: true,
-    handler: async (context) => {
-      const { argv, spinner, logger } = context;
-      
+    handler: async context => {
+      const { argv, spinner, logger } = context
+
       if (spinner) {
-        spinner.start('Connecting to browser...');
+        spinner.start('Connecting to browser...')
       }
-      
-      await BrowserHelper.withActivePage(argv.port, async (page) => {
+
+      await BrowserHelper.withActivePage(argv.port, async page => {
         if (spinner) {
-          spinner.text = 'Executing command...';
+          spinner.text = 'Executing command...'
         }
-        
-        await browserHandler(page, context);
-      });
-    }
-  });
+
+        await browserHandler(page, context)
+      })
+    },
+  })
 }
 
 /**
@@ -286,15 +289,15 @@ export function createBrowserCommand<T extends BaseCommandOptions>(
 export async function refSelectorMiddleware<T extends { selector?: string }>(
   argv: ArgumentsCamelCase<T>
 ): Promise<void> {
-  if (!argv.selector) return;
-  
-  const refMatch = argv.selector.match(/^\[ref=([a-f0-9]+)\]$/);
+  if (!argv.selector) return
+
+  const refMatch = argv.selector.match(/^\[ref=([a-f0-9]+)\]$/)
   if (refMatch) {
     // This will be handled in the command handler
     // Just validate the format here
-    const ref = refMatch[1];
+    const ref = refMatch[1]
     if (!/^[a-f0-9]+$/.test(ref)) {
-      throw new Error(`Invalid ref format: ${ref}`);
+      throw new Error(`Invalid ref format: ${ref}`)
     }
   }
 }
@@ -306,44 +309,47 @@ export function modifierMiddleware<T extends BaseCommandOptions>(
   argv: ArgumentsCamelCase<T>
 ): void {
   // Parse modifier flags into an array
-  const modifiers: string[] = [];
-  
-  if ((argv as any).shift === true) modifiers.push('Shift');
-  if ((argv as any).ctrl === true) modifiers.push('Control');
-  if ((argv as any).alt === true) modifiers.push('Alt');
-  if ((argv as any).meta === true) modifiers.push('Meta');
-  if ((argv as any)['ctrl-or-meta'] === true) modifiers.push('ControlOrMeta');
-  
+  const modifiers: string[] = []
+
+  if ((argv as any).shift === true) modifiers.push('Shift')
+  if ((argv as any).ctrl === true) modifiers.push('Control')
+  if ((argv as any).alt === true) modifiers.push('Alt')
+  if ((argv as any).meta === true) modifiers.push('Meta')
+  if ((argv as any)['ctrl-or-meta'] === true) modifiers.push('ControlOrMeta')
+
   // Add modifiers array to argv
-  (argv as any).modifiers = modifiers;
+  ;(argv as any).modifiers = modifiers
 }
 
 /**
  * Helper to format command output
  */
-export function formatOutput(data: any, format: 'json' | 'table' | 'list' = 'list'): string {
+export function formatOutput(
+  data: any,
+  format: 'json' | 'table' | 'list' = 'list'
+): string {
   switch (format) {
     case 'json':
-      return JSON.stringify(data, null, 2);
-      
+      return JSON.stringify(data, null, 2)
+
     case 'table':
       // Simple table formatting
       if (Array.isArray(data) && data.length > 0) {
-        const keys = Object.keys(data[0]);
-        const header = keys.join('\t');
-        const rows = data.map(item => 
+        const keys = Object.keys(data[0])
+        const header = keys.join('\t')
+        const rows = data.map(item =>
           keys.map(key => String(item[key] ?? '')).join('\t')
-        );
-        return [header, ...rows].join('\n');
+        )
+        return [header, ...rows].join('\n')
       }
-      return String(data);
-      
+      return String(data)
+
     case 'list':
     default:
       if (Array.isArray(data)) {
-        return data.map((item, i) => `${i + 1}. ${String(item)}`).join('\n');
+        return data.map((item, i) => `${i + 1}. ${String(item)}`).join('\n')
       }
-      return String(data);
+      return String(data)
   }
 }
 
@@ -356,10 +362,10 @@ export async function withTimeout<T>(
   errorMessage = 'Operation timed out'
 ): Promise<T> {
   const timeout = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error(errorMessage)), timeoutMs);
-  });
-  
-  return Promise.race([promise, timeout]);
+    setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+  })
+
+  return Promise.race([promise, timeout])
 }
 
 /**
@@ -370,45 +376,45 @@ export async function withRetry<T>(
   maxRetries = 3,
   delayMs = 1000
 ): Promise<T> {
-  let lastError: Error | undefined;
-  
+  let lastError: Error | undefined
+
   for (let i = 0; i <= maxRetries; i++) {
     try {
-      return await operation();
+      return await operation()
     } catch (error: any) {
-      lastError = error;
-      
+      lastError = error
+
       if (i < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, delayMs));
+        await new Promise(resolve => setTimeout(resolve, delayMs))
       }
     }
   }
-  
-  throw lastError || new Error('Operation failed after retries');
+
+  throw lastError || new Error('Operation failed after retries')
 }
 
 /**
  * Export a command registry for tracking all commands
  */
 export class CommandRegistry {
-  private commands: Map<string, CommandMetadata> = new Map();
-  
+  private commands: Map<string, CommandMetadata> = new Map()
+
   register(command: string, metadata: CommandMetadata): void {
-    this.commands.set(command, metadata);
+    this.commands.set(command, metadata)
   }
-  
+
   get(command: string): CommandMetadata | undefined {
-    return this.commands.get(command);
+    return this.commands.get(command)
   }
-  
+
   getAll(): CommandMetadata[] {
-    return Array.from(this.commands.values());
+    return Array.from(this.commands.values())
   }
-  
+
   getByCategory(category: string): CommandMetadata[] {
-    return this.getAll().filter(cmd => cmd.category === category);
+    return this.getAll().filter(cmd => cmd.category === category)
   }
 }
 
 // Global command registry instance
-export const commandRegistry = new CommandRegistry();
+export const commandRegistry = new CommandRegistry()

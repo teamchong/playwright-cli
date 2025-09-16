@@ -1,7 +1,7 @@
-import { readFileSync } from 'fs';
-import { join } from 'path';
-import { CommandModule, Arguments } from 'yargs';
-import { logger } from '../../../lib/logger';
+import { readFileSync } from 'fs'
+import { join } from 'path'
+import { CommandModule, Arguments } from 'yargs'
+import { logger } from '../../../lib/logger'
 
 // Fallback if file not found
 const CLAUDE_INSTRUCTIONS_FALLBACK = `# Playwright CLI - Claude Instructions
@@ -160,22 +160,22 @@ If browser doesn't launch:
 1. Check if Chrome/Chromium is installed
 2. Try \`playwright install chromium\` to install Playwright's browser
 3. Verify no other process is using port 9222
-4. Try with explicit port: \`playwright open --port 9223\``;
+4. Try with explicit port: \`playwright open --port 9223\``
 
 export const claudeCommand: CommandModule = {
   command: 'claude',
   aliases: ['claude-instructions'],
   describe: 'Output Claude-specific usage instructions',
-  
-  handler: async (argv) => {
+
+  handler: async argv => {
     try {
       // Try to read CLAUDE.md from the repo
-      const instructionsPath = join(process.cwd(), 'CLAUDE.md');
-      const instructions = readFileSync(instructionsPath, 'utf-8');
-      logger.info(instructions);
+      const instructionsPath = join(process.cwd(), 'CLAUDE.md')
+      const instructions = readFileSync(instructionsPath, 'utf-8')
+      logger.info(instructions)
     } catch {
       // Fallback to embedded instructions
-      logger.info(CLAUDE_INSTRUCTIONS_FALLBACK);
+      logger.info(CLAUDE_INSTRUCTIONS_FALLBACK)
     }
-  }
-};
+  },
+}

@@ -1,8 +1,13 @@
-import { spawn } from 'child_process';
-import * as fs from 'fs';
-import os from 'os';
+import { spawn } from 'child_process'
+import * as fs from 'fs'
+import os from 'os'
 
-import { chromium, type Browser, type Page, type BrowserContext } from 'playwright';
+import {
+  chromium,
+  type Browser,
+  type Page,
+  type BrowserContext,
+} from 'playwright'
 
 /**
  * Helper class for managing Chrome browser connections and operations.
@@ -33,14 +38,16 @@ export class BrowserHelper {
    */
   static async getBrowser(port: number = 9222): Promise<Browser> {
     try {
-      const browser = await chromium.connectOverCDP(`http://localhost:${port}`);
+      const browser = await chromium.connectOverCDP(`http://localhost:${port}`)
       // Set default timeout to 5 seconds for all operations
       browser.contexts().forEach(context => {
-        context.setDefaultTimeout(5000);
-      });
-      return browser;
+        context.setDefaultTimeout(5000)
+      })
+      return browser
     } catch (error: any) {
-      throw new Error(`No browser running on port ${port}. Use "playwright open" first`);
+      throw new Error(
+        `No browser running on port ${port}. Use "playwright open" first`
+      )
     }
   }
 
@@ -63,11 +70,11 @@ export class BrowserHelper {
     port: number,
     action: (browser: Browser) => Promise<T>
   ): Promise<T> {
-    const browser = await this.getBrowser(port);
+    const browser = await this.getBrowser(port)
     try {
-      return await action(browser);
+      return await action(browser)
     } finally {
-      await browser.close();
+      await browser.close()
     }
   }
 
@@ -85,14 +92,14 @@ export class BrowserHelper {
    * ```
    */
   static async getPages(port: number = 9222): Promise<Page[]> {
-    const browser = await this.getBrowser(port);
-    const allPages: Page[] = [];
+    const browser = await this.getBrowser(port)
+    const allPages: Page[] = []
 
     for (const context of browser.contexts()) {
-      allPages.push(...context.pages());
+      allPages.push(...context.pages())
     }
 
-    return allPages;
+    return allPages
   }
 
   /**
@@ -109,9 +116,12 @@ export class BrowserHelper {
    * const thirdPage = await BrowserHelper.getPage(2, 9222);
    * ```
    */
-  static async getPage(index: number = 0, port: number = 9222): Promise<Page | null> {
-    const pages = await this.getPages(port);
-    return pages[index] || null;
+  static async getPage(
+    index: number = 0,
+    port: number = 9222
+  ): Promise<Page | null> {
+    const pages = await this.getPages(port)
+    return pages[index] || null
   }
 
   /**
@@ -132,26 +142,26 @@ export class BrowserHelper {
    * ```
    */
   static async getActivePage(port: number = 9222): Promise<Page> {
-    const browser = await this.getBrowser(port);
+    const browser = await this.getBrowser(port)
 
     // Find first non-internal page
     for (const context of browser.contexts()) {
       for (const page of context.pages()) {
-        const url = page.url();
+        const url = page.url()
         if (!url.startsWith('chrome://') && !url.startsWith('about:')) {
-          return page;
+          return page
         }
       }
     }
 
     // If no active page, create one
-    const contexts = browser.contexts();
+    const contexts = browser.contexts()
     if (contexts.length > 0) {
-      return await contexts[0].newPage();
+      return await contexts[0].newPage()
     }
 
-    const context = await browser.newContext();
-    return await context.newPage();
+    const context = await browser.newContext()
+    return await context.newPage()
   }
 
   /**
@@ -175,29 +185,29 @@ export class BrowserHelper {
     port: number,
     action: (page: Page) => Promise<T>
   ): Promise<T> {
-    return this.withBrowser(port, async (browser) => {
+    return this.withBrowser(port, async browser => {
       // Find first non-internal page
       for (const context of browser.contexts()) {
         for (const page of context.pages()) {
-          const url = page.url();
+          const url = page.url()
           if (!url.startsWith('chrome://') && !url.startsWith('about:')) {
-            return await action(page);
+            return await action(page)
           }
         }
       }
 
       // If no active page, create one
-      const contexts = browser.contexts();
-      let page: Page;
+      const contexts = browser.contexts()
+      let page: Page
       if (contexts.length > 0) {
-        page = await contexts[0].newPage();
+        page = await contexts[0].newPage()
       } else {
-        const context = await browser.newContext();
-        context.setDefaultTimeout(5000); // Set 5s timeout for new context
-        page = await context.newPage();
+        const context = await browser.newContext()
+        context.setDefaultTimeout(5000) // Set 5s timeout for new context
+        page = await context.newPage()
       }
-      return await action(page);
-    });
+      return await action(page)
+    })
   }
 
   /**
@@ -215,12 +225,12 @@ export class BrowserHelper {
    * ```
    */
   static async getPageId(page: Page): Promise<string> {
-    const cdp = await page.context().newCDPSession(page);
+    const cdp = await page.context().newCDPSession(page)
     try {
-      const targetInfo = await cdp.send('Target.getTargetInfo');
-      return targetInfo.targetInfo.targetId;
+      const targetInfo = await cdp.send('Target.getTargetInfo')
+      return targetInfo.targetInfo.targetId
     } finally {
-      await cdp.detach();
+      await cdp.detach()
     }
   }
 
@@ -241,21 +251,21 @@ export class BrowserHelper {
    * ```
    */
   static async findPageById(port: number, tabId: string): Promise<Page | null> {
-    const pages = await this.getPages(port);
-    
+    const pages = await this.getPages(port)
+
     for (const page of pages) {
       try {
-        const pageId = await this.getPageId(page);
+        const pageId = await this.getPageId(page)
         if (pageId === tabId) {
-          return page;
+          return page
         }
       } catch (error) {
         // Skip this page if we can't get its ID
-        continue;
+        continue
       }
     }
-    
-    return null;
+
+    return null
   }
 
   /**
@@ -276,12 +286,12 @@ export class BrowserHelper {
    * await BrowserHelper.withTargetPage(9222, 1, undefined, async (page) => {
    *   return await page.title();
    * });
-   * 
+   *
    * // Use by unique ID
    * await BrowserHelper.withTargetPage(9222, undefined, "71A23E3014E274B134EB46BA2C2AA755", async (page) => {
    *   return await page.title();
    * });
-   * 
+   *
    * // Use active page
    * await BrowserHelper.withTargetPage(9222, undefined, undefined, async (page) => {
    *   return await page.title();
@@ -296,38 +306,42 @@ export class BrowserHelper {
   ): Promise<T> {
     // Validate arguments
     if (tabIndex !== undefined && tabId !== undefined) {
-      throw new Error('Cannot specify both tabIndex and tabId. Use one or the other.');
+      throw new Error(
+        'Cannot specify both tabIndex and tabId. Use one or the other.'
+      )
     }
 
     // If neither specified, use active page
     if (tabIndex === undefined && tabId === undefined) {
-      return this.withActivePage(port, action);
+      return this.withActivePage(port, action)
     }
 
-    return this.withBrowser(port, async (browser) => {
-      let targetPage: Page | null = null;
+    return this.withBrowser(port, async browser => {
+      let targetPage: Page | null = null
 
       if (tabId !== undefined) {
         // Find by unique ID
-        targetPage = await this.findPageById(port, tabId);
+        targetPage = await this.findPageById(port, tabId)
         if (!targetPage) {
-          throw new Error(`Tab with ID "${tabId}" not found`);
+          throw new Error(`Tab with ID "${tabId}" not found`)
         }
       } else if (tabIndex !== undefined) {
         // Find by index
-        const pages = await this.getPages(port);
+        const pages = await this.getPages(port)
         if (tabIndex < 0 || tabIndex >= pages.length) {
-          throw new Error(`Tab index ${tabIndex} is out of bounds. Available tabs: 0-${pages.length - 1}`);
+          throw new Error(
+            `Tab index ${tabIndex} is out of bounds. Available tabs: 0-${pages.length - 1}`
+          )
         }
-        targetPage = pages[tabIndex];
+        targetPage = pages[tabIndex]
       }
 
       if (!targetPage) {
-        throw new Error('Unable to find target page');
+        throw new Error('Unable to find target page')
       }
 
-      return await action(targetPage);
-    });
+      return await action(targetPage)
+    })
   }
 
   /**
@@ -344,8 +358,8 @@ export class BrowserHelper {
    * ```
    */
   static async getContexts(port: number = 9222): Promise<BrowserContext[]> {
-    const browser = await this.getBrowser(port);
-    return browser.contexts();
+    const browser = await this.getBrowser(port)
+    return browser.contexts()
   }
 
   /**
@@ -364,22 +378,22 @@ export class BrowserHelper {
    * ```
    */
   static async isPortOpen(port: number): Promise<boolean> {
-    const net = require('net');
-    return new Promise((resolve) => {
-      const socket = net.createConnection(port, 'localhost');
+    const net = require('net')
+    return new Promise(resolve => {
+      const socket = net.createConnection(port, 'localhost')
       socket.on('connect', () => {
-        socket.end();
-        resolve(true);
-      });
+        socket.end()
+        resolve(true)
+      })
       socket.on('error', () => {
-        resolve(false);
-      });
-      socket.setTimeout(1000);
+        resolve(false)
+      })
+      socket.setTimeout(1000)
       socket.on('timeout', () => {
-        socket.destroy();
-        resolve(false);
-      });
-    });
+        socket.destroy()
+        resolve(false)
+      })
+    })
   }
 
   /**
@@ -404,53 +418,58 @@ export class BrowserHelper {
    * await BrowserHelper.launchChrome(9222, '/path/to/chrome');
    * ```
    */
-  static async launchChrome(port: number = 9222, browserPathOrType?: string, url?: string): Promise<void> {
+  static async launchChrome(
+    port: number = 9222,
+    browserPathOrType?: string,
+    url?: string
+  ): Promise<void> {
     // Determine browser path
-    let browserPath: string;
+    let browserPath: string
 
     if (browserPathOrType && browserPathOrType.includes('/')) {
       // It's a full path
-      browserPath = browserPathOrType;
+      browserPath = browserPathOrType
     } else {
       // It's a browser type name, use default paths
       const browserPaths: Record<string, string> = {
-        'chrome': '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-        'brave': '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
-        'edge': '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
-        'chromium': '/Applications/Chromium.app/Contents/MacOS/Chromium'
-      };
+        chrome: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        brave: '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+        edge: '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+        chromium: '/Applications/Chromium.app/Contents/MacOS/Chromium',
+      }
 
-      browserPath = browserPaths[browserPathOrType || 'chrome'] || browserPaths.chrome;
+      browserPath =
+        browserPaths[browserPathOrType || 'chrome'] || browserPaths.chrome
     }
 
     // Check if browser exists
     try {
-      await fs.promises.access(browserPath);
+      await fs.promises.access(browserPath)
     } catch {
-      throw new Error(`Browser not found at: ${browserPath}`);
+      throw new Error(`Browser not found at: ${browserPath}`)
     }
 
     const args = [
       `--remote-debugging-port=${port}`,
       '--no-first-run',
       '--no-default-browser-check',
-      `--user-data-dir=${os.tmpdir()}/playwright-chrome-${port}`
-    ];
+      `--user-data-dir=${os.tmpdir()}/playwright-chrome-${port}`,
+    ]
 
     if (url) {
-      args.push(url);
+      args.push(url)
     }
 
     const child = spawn(browserPath, args, {
       detached: true,
-      stdio: 'ignore'
-    });
+      stdio: 'ignore',
+    })
 
     // Unref the child process so the parent can exit
-    child.unref();
+    child.unref()
 
     // Wait for browser to start
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise(resolve => setTimeout(resolve, 1500))
   }
 
   /**
@@ -471,12 +490,15 @@ export class BrowserHelper {
    */
   static async createTabHTTP(port: number, url: string): Promise<boolean> {
     try {
-      const response = await fetch(`http://localhost:${port}/json/new?${encodeURIComponent(url)}`, {
-        method: 'PUT'
-      });
-      return response.ok;
+      const response = await fetch(
+        `http://localhost:${port}/json/new?${encodeURIComponent(url)}`,
+        {
+          method: 'PUT',
+        }
+      )
+      return response.ok
     } catch {
-      return false;
+      return false
     }
   }
 }

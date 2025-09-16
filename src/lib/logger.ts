@@ -1,5 +1,5 @@
-import chalk from 'chalk';
-import winston from 'winston';
+import chalk from 'chalk'
+import winston from 'winston'
 
 /**
  * Log levels in order of priority.
@@ -13,7 +13,7 @@ export enum LogLevel {
   /** General information messages */
   INFO = 'info',
   /** Detailed debugging information */
-  DEBUG = 'debug'
+  DEBUG = 'debug',
 }
 
 // Custom format for CLI output with colors
@@ -24,22 +24,22 @@ const cliFormat = winston.format.combine(
       error: chalk.red,
       warn: chalk.yellow,
       info: chalk.cyan,
-      debug: chalk.gray
-    };
+      debug: chalk.gray,
+    }
 
-    const colorFn = colorMap[level as keyof typeof colorMap] || chalk.white;
-    const prefix = level === 'info' ? '' : `[${level.toUpperCase()}] `;
+    const colorFn = colorMap[level as keyof typeof colorMap] || chalk.white
+    const prefix = level === 'info' ? '' : `[${level.toUpperCase()}] `
 
-    return colorFn(`${prefix}${message}`);
+    return colorFn(`${prefix}${message}`)
   })
-);
+)
 
 // JSON format for file logging
 const fileFormat = winston.format.combine(
   winston.format.timestamp(),
   winston.format.errors({ stack: true }),
   winston.format.json()
-);
+)
 
 /**
  * Enhanced logger service using Winston for structured logging.
@@ -57,11 +57,11 @@ const fileFormat = winston.format.combine(
  * ```
  */
 class Logger {
-  private winston: winston.Logger;
+  private winston: winston.Logger
 
   constructor() {
     // Default to info level, can be overridden via env var
-    const logLevel = process.env.LOG_LEVEL || 'info';
+    const logLevel = process.env.LOG_LEVEL || 'info'
 
     this.winston = winston.createLogger({
       level: logLevel,
@@ -72,74 +72,76 @@ class Logger {
           format: cliFormat,
           level: logLevel,
           handleExceptions: false,
-          handleRejections: false
+          handleRejections: false,
         }),
 
         // Optional file logging (only if LOG_FILE is set)
-        ...(process.env.LOG_FILE ? [
-          new winston.transports.File({
-            filename: process.env.LOG_FILE,
-            format: fileFormat,
-            level: 'debug' // Log all levels to file
-          })
-        ] : [])
-      ]
-    });
+        ...(process.env.LOG_FILE
+          ? [
+              new winston.transports.File({
+                filename: process.env.LOG_FILE,
+                format: fileFormat,
+                level: 'debug', // Log all levels to file
+              }),
+            ]
+          : []),
+      ],
+    })
   }
 
   error(message: string, error?: Error): void {
     if (error?.stack) {
-      this.winston.error(message, { error: error.message, stack: error.stack });
+      this.winston.error(message, { error: error.message, stack: error.stack })
     } else {
-      this.winston.error(message);
+      this.winston.error(message)
     }
   }
 
   warn(message: string): void {
-    this.winston.warn(message);
+    this.winston.warn(message)
   }
 
   info(message: string): void {
-    this.winston.info(message);
+    this.winston.info(message)
   }
 
   debug(message: string): void {
-    this.winston.debug(message);
+    this.winston.debug(message)
   }
 
   success(message: string): void {
     // Special case for success messages - always show in green
-    console.log(chalk.green(`✅ ${message}`));
+    console.log(chalk.green(`✅ ${message}`))
   }
 
   // Convenience method for command completion
   commandSuccess(message: string): void {
-    this.success(message);
+    this.success(message)
   }
 
   // Convenience method for command errors
   commandError(message: string, error?: Error): void {
-    const errorMsg = error ? `${message}: ${error.message}` : message;
-    this.error(`❌ ${errorMsg}`, error);
+    const errorMsg = error ? `${message}: ${error.message}` : message
+    this.error(`❌ ${errorMsg}`, error)
   }
 
   // Set log level dynamically
   setLevel(level: LogLevel): void {
     this.winston.transports.forEach(transport => {
       if (transport instanceof winston.transports.Console) {
-        transport.level = level;
+        transport.level = level
       }
-    });
+    })
   }
 
   // Ensure clean shutdown
   close(): void {
-    this.winston.end();
+    this.winston.end()
   }
 }
 
 // Export singleton instance
-export const logger = new Logger();
+export const logger = new Logger()
 
 // Export for testing/custom instances
-export { Logger };
+export { Logger }

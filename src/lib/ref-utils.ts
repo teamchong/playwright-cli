@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { createHash } from 'crypto'
 
 /**
  * Generates a deterministic reference identifier from element properties.
@@ -16,9 +16,9 @@ import { createHash } from 'crypto';
  * ```
  */
 export function generateRef(node: any, path: string = ''): string {
-  const content = `${path}-${node.role}-${node.name || ''}-${node.value || ''}`;
-  const hash = createHash('md5').update(content).digest('hex');
-  return hash.substring(0, 6);
+  const content = `${path}-${node.role}-${node.name || ''}-${node.value || ''}`
+  const hash = createHash('md5').update(content).digest('hex')
+  return hash.substring(0, 6)
 }
 
 /**
@@ -39,22 +39,32 @@ export function generateRef(node: any, path: string = ''): string {
  */
 export function isInteractive(node: any): boolean {
   const interactiveRoles = [
-    'button', 'link', 'textbox', 'checkbox', 'radio',
-    'combobox', 'menuitem', 'tab', 'switch', 'slider',
-    'searchbox', 'spinbutton', 'option'
-  ];
+    'button',
+    'link',
+    'textbox',
+    'checkbox',
+    'radio',
+    'combobox',
+    'menuitem',
+    'tab',
+    'switch',
+    'slider',
+    'searchbox',
+    'spinbutton',
+    'option',
+  ]
 
   // Check role
   if (interactiveRoles.includes(node.role)) {
-    return true;
+    return true
   }
 
   // Check if it's clickable/focusable
   if (node.focusable || node.clickable) {
-    return true;
+    return true
   }
 
-  return false;
+  return false
 }
 
 /**
@@ -75,22 +85,30 @@ export function isInteractive(node: any): boolean {
  * }
  * ```
  */
-export function findElementByRef(node: any, targetRef: string, path: string = ''): any {
-  if (!node) return null;
+export function findElementByRef(
+  node: any,
+  targetRef: string,
+  path: string = ''
+): any {
+  if (!node) return null
 
-  const currentRef = generateRef(node, path);
+  const currentRef = generateRef(node, path)
   if (currentRef === targetRef) {
-    return node;
+    return node
   }
 
   if (node.children) {
     for (let i = 0; i < node.children.length; i++) {
-      const found = findElementByRef(node.children[i], targetRef, `${path}-${i}`);
-      if (found) return found;
+      const found = findElementByRef(
+        node.children[i],
+        targetRef,
+        `${path}-${i}`
+      )
+      if (found) return found
     }
   }
 
-  return null;
+  return null
 }
 
 /**
@@ -114,33 +132,37 @@ export function findElementByRef(node: any, targetRef: string, path: string = ''
 export function nodeToSelector(node: any): string {
   // Try to create a unique selector based on the node properties
   if (node.role === 'button' && node.name) {
-    return `button:has-text("${node.name}")`;
+    return `button:has-text("${node.name}")`
   }
   if (node.role === 'link' && node.name) {
-    return `a:has-text("${node.name}")`;
+    return `a:has-text("${node.name}")`
   }
   if (node.role === 'textbox') {
     if (node.name) {
-      return `input[aria-label="${node.name}"]`;
+      return `input[aria-label="${node.name}"]`
     }
     if (node.value) {
-      return `input[value="${node.value}"]`;
+      return `input[value="${node.value}"]`
     }
-    return 'input[type="text"]';
+    return 'input[type="text"]'
   }
   if (node.role === 'checkbox') {
-    return node.name ? `input[type="checkbox"][aria-label="${node.name}"]` : 'input[type="checkbox"]';
+    return node.name
+      ? `input[type="checkbox"][aria-label="${node.name}"]`
+      : 'input[type="checkbox"]'
   }
   if (node.role === 'radio') {
-    return node.name ? `input[type="radio"][aria-label="${node.name}"]` : 'input[type="radio"]';
+    return node.name
+      ? `input[type="radio"][aria-label="${node.name}"]`
+      : 'input[type="radio"]'
   }
 
   // Fallback to text content
   if (node.name) {
-    return `:has-text("${node.name}")`;
+    return `:has-text("${node.name}")`
   }
 
-  return '*'; // Last resort
+  return '*' // Last resort
 }
 
 /**
@@ -171,26 +193,30 @@ export function nodeToSelector(node: any): string {
  * // ]
  * ```
  */
-export function extractInteractiveElements(node: any, path: string = '', results: any[] = []): any[] {
-  if (!node) return results;
+export function extractInteractiveElements(
+  node: any,
+  path: string = '',
+  results: any[] = []
+): any[] {
+  if (!node) return results
 
   // Add current node if interactive
   if (isInteractive(node)) {
-    const ref = generateRef(node, path);
+    const ref = generateRef(node, path)
     results.push({
       role: node.role,
       name: node.name || node.value || '',
       ref: ref,
-      description: node.description
-    });
+      description: node.description,
+    })
   }
 
   // Recurse through children
   if (node.children) {
     node.children.forEach((child: any, index: number) => {
-      extractInteractiveElements(child, `${path}-${index}`, results);
-    });
+      extractInteractiveElements(child, `${path}-${index}`, results)
+    })
   }
 
-  return results;
+  return results
 }
