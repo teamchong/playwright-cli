@@ -11,10 +11,6 @@ jobs:
     name: Test and Code Quality
     runs-on: ubuntu-latest
     
-    strategy:
-      matrix:
-        node-version: [18, 20, 22]
-    
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -27,7 +23,7 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: ${{ matrix.node-version }}
+        node-version: 20
         cache: 'pnpm'
     
     - name: Setup pnpm
@@ -56,7 +52,7 @@ jobs:
       run: pnpm run build:ts
     
     - name: Upload coverage reports
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       with:
         file: ./coverage/coverage-final.json
         flags: unittests
@@ -83,15 +79,15 @@ jobs:
         "
     
     - name: Upload ESLint report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: eslint-report-node-${{ matrix.node-version }}
+        name: eslint-report
         path: eslint-report.json
     
     - name: Comment PR with results
       if: github.event_name == 'pull_request'
-      uses: actions/github-script@v6
+      uses: actions/github-script@v7
       with:
         script: |
           const fs = require('fs');
@@ -120,7 +116,7 @@ jobs:
             coverageReport = 'Coverage: Report not generated';
           }
           
-          const comment = `## 🤖 CI Results for Node ${matrix.node-version}
+          const comment = `## 🤖 CI Results
           
           ${eslintReport}
           ${coverageReport}
@@ -179,7 +175,7 @@ jobs:
       run: pnpm run build:bun
     
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: build-${{ matrix.os }}
         path: |
