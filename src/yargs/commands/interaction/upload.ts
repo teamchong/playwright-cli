@@ -44,17 +44,29 @@ export const uploadCommand = createCommand<UploadOptions>({
         describe: 'Timeout in milliseconds',
         type: 'number',
         default: 5000
-      });
+      })
+      .option('tab-index', {
+        describe: 'Target specific tab by index (0-based)',
+        type: 'number',
+        alias: 'tab'
+      })
+      .option('tab-id', {
+        describe: 'Target specific tab by unique ID',
+        type: 'string'
+      })
+      .conflicts('tab-index', 'tab-id');
   },
   
   handler: async ({ argv, logger, spinner }) => {
     const { selector, files, port } = argv;
+    const tabIndex = argv['tab-index'] as number | undefined;
+    const tabId = argv['tab-id'] as string | undefined;
     
     if (spinner) {
       spinner.text = `Uploading ${files.length} file(s) to ${selector}...`;
     }
     
-    await BrowserHelper.withActivePage(port, async (page) => {
+    await BrowserHelper.withTargetPage(port, tabIndex, tabId, async (page) => {
       // Resolve absolute paths
       const absolutePaths = files.map((file: string) =>
         path.isAbsolute(file) ? file : path.resolve(process.cwd(), file)

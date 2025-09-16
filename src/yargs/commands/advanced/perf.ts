@@ -67,6 +67,7 @@ export const perfCommand = createCommand<PerfOptions>({
       if (argv.clear) {
         performanceMonitor.clearMetrics();
         logger.success('Performance metrics cleared');
+        console.log('Performance metrics cleared');
         return;
       }
       
@@ -113,6 +114,7 @@ export const perfCommand = createCommand<PerfOptions>({
       if (stats.totalCommands === 0) {
         logger.info(chalk.blue('📊 No performance data available yet'));
         logger.info(chalk.gray('Run some commands to start collecting performance metrics'));
+        console.log('No performance data available yet');
         return;
       }
       

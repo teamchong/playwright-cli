@@ -44,6 +44,16 @@ export const evalCommand = createCommand<EvalOptions>({
         type: 'number',
         default: 30000
       })
+      .option('tab-index', {
+        describe: 'Target specific tab by index (0-based)',
+        type: 'number',
+        alias: 'tab'
+      })
+      .option('tab-id', {
+        describe: 'Target specific tab by unique ID',
+        type: 'string'
+      })
+      .conflicts('tab-index', 'tab-id')
       .example('$0 eval "document.title"', 'Get the page title')
       .example('$0 eval "Array.from(document.querySelectorAll(\'a\')).map(a => a.href)" --json', 'Get all links as JSON');
   },
@@ -51,21 +61,20 @@ export const evalCommand = createCommand<EvalOptions>({
   handler: async (context) => {
     try {
       const { argv, logger } = context;
-      const page = await BrowserHelper.getActivePage(argv.port);
+      const tabIndex = argv['tab-index'] as number | undefined;
+      const tabId = argv['tab-id'] as string | undefined;
       
-      if (!page) {
-        throw new Error('No browser session. Use "playwright open" first');
-      }
-      
-      // Execute the JavaScript expression
-      const result = await page.evaluate(argv.expression);
-      
-      // Format output based on options
-      if (argv.json) {
-        logger.info(JSON.stringify(result, null, 2));
-      } else {
-        logger.info(String(result));
-      }
+      await BrowserHelper.withTargetPage(argv.port, tabIndex, tabId, async (page) => {
+        // Execute the JavaScript expression
+        const result = await page.evaluate(argv.expression);
+        
+        // Format output based on options
+        if (argv.json) {
+          logger.info(JSON.stringify(result, null, 2));
+        } else {
+          logger.info(String(result));
+        }
+      });
     } catch (error: any) {
       logger.commandError(`Evaluation failed: ${error.message}`);
       throw new Error("Command failed");

@@ -53,17 +53,32 @@ export const typeCommand = createCommand<TypeOptions>({
         describe: 'Clear field before typing',
         type: 'boolean',
         default: false
-      });
+      })
+      .option('tab-index', {
+        describe: 'Target specific tab by index (0-based)',
+        type: 'number',
+        alias: 'tab'
+      })
+      .option('tab-id', {
+        describe: 'Target specific tab by unique ID',
+        type: 'string'
+      })
+      .conflicts('tab-index', 'tab-id');
   },
   
   handler: async ({ argv, logger, spinner }) => {
     const { selector, text, port, delay, timeout, clear } = argv;
+    const tabIndex = argv['tab-index'] as number | undefined;
+    const tabId = argv['tab-id'] as string | undefined;
+    
+    const tabTarget = tabIndex !== undefined ? ` in tab ${tabIndex}` : 
+                     tabId !== undefined ? ` in tab ${tabId.slice(0, 8)}...` : '';
     
     if (spinner) {
-      spinner.text = `Typing into ${selector}...`;
+      spinner.text = `Typing into ${selector}${tabTarget}...`;
     }
     
-    await BrowserHelper.withActivePage(port, async (page) => {
+    await BrowserHelper.withTargetPage(port, tabIndex, tabId, async (page) => {
       let actualSelector = selector;
       
       // Check if it's a ref selector
@@ -110,6 +125,6 @@ export const typeCommand = createCommand<TypeOptions>({
       }
     });
     
-    logger.success(`Typed text into ${selector}`);
+    logger.success(`Typed text into ${selector}${tabTarget}`);
   }
 });

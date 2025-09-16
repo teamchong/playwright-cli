@@ -9,6 +9,9 @@ interface PdfArgs extends Arguments {
   port: number;
   timeout: number;
   format?: string;
+  landscape?: boolean;
+  'tab-index'?: number;
+  'tab-id'?: string;
 }
 
 export const pdfCommand: CommandModule<{}, PdfArgs> = {
@@ -38,25 +41,40 @@ export const pdfCommand: CommandModule<{}, PdfArgs> = {
         describe: 'Paper format (A4, Letter, etc)',
         type: 'string',
         default: 'A4'
-      });
+      })
+      .option('landscape', {
+        describe: 'Use landscape orientation',
+        type: 'boolean',
+        default: false
+      })
+      .option('tab-index', {
+        describe: 'Target specific tab by index (0-based)',
+        type: 'number',
+        alias: 'tab'
+      })
+      .option('tab-id', {
+        describe: 'Target specific tab by unique ID',
+        type: 'string'
+      })
+      .conflicts('tab-index', 'tab-id');
   },
   
   handler: async (argv) => {
     const spinner = ora('Generating PDF...').start();
+    const tabIndex = argv['tab-index'] as number | undefined;
+    const tabId = argv['tab-id'] as string | undefined;
 
     try {
-      const page = await BrowserHelper.getActivePage(argv.port);
-      if (!page) {
-        throw new Error('No browser session. Use "playwright open" first');
-      }
+      await BrowserHelper.withTargetPage(argv.port, tabIndex, tabId, async (page) => {
+        await page.pdf({
+          path: argv.path,
+          format: argv.format,
+          landscape: argv.landscape
+        });
 
-      await page.pdf({
-        path: argv.path,
-        format: argv.format
+        spinner.succeed(chalk.green(`✅ PDF saved to ${argv.path}`));
+        console.log(`PDF saved to ${argv.path}`);
       });
-
-      spinner.succeed(chalk.green(`✅ PDF saved to ${argv.path}`));
-      // Exit cleanly
 
       return;
 

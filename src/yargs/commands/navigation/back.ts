@@ -26,16 +26,29 @@ export const backCommand = createCommand<NavigationHistoryOptions>({
         default: 9222,
         alias: 'p'
       })
+      .option('tab-index', {
+        describe: 'Target specific tab by index (0-based)',
+        type: 'number',
+        alias: 'tab'
+      })
+      .option('tab-id', {
+        describe: 'Target specific tab by unique ID',
+        type: 'string'
+      })
+      .conflicts('tab-index', 'tab-id')
       .example('$0 back', 'Go back one page in browser history')
       .example('$0 back --port 8080', 'Go back using specific port');
   },
   
   handler: async ({ argv, logger, spinner }) => {
+    const tabIndex = argv['tab-index'] as number | undefined;
+    const tabId = argv['tab-id'] as string | undefined;
+    
     if (spinner) {
       spinner.start('Navigating back...');
     }
     
-    await BrowserHelper.withActivePage(argv.port, async (page) => {
+    await BrowserHelper.withTargetPage(argv.port, tabIndex, tabId, async (page) => {
       try {
         // Start navigation back without waiting for completion
         await Promise.race([

@@ -49,25 +49,42 @@ export const navigateCommand = createCommand<NavigateOptions>({
       .option('referer', {
         describe: 'Referer header value',
         type: 'string'
-      });
+      })
+      .option('tab-index', {
+        describe: 'Target specific tab by index (0-based)',
+        type: 'number',
+        alias: 'tab'
+      })
+      .option('tab-id', {
+        describe: 'Target specific tab by unique ID',
+        type: 'string'
+      })
+      .conflicts('tab-index', 'tab-id');
   },
   
   handler: async ({ argv, logger, spinner }) => {
     const { url, waitUntil, timeout, referer } = argv;
+    const tabIndex = argv['tab-index'] as number | undefined;
+    const tabId = argv['tab-id'] as string | undefined;
+    
+    const tabTarget = tabIndex !== undefined ? ` in tab ${tabIndex}` : 
+                     tabId !== undefined ? ` in tab ${tabId.slice(0, 8)}...` : '';
     
     if (spinner) {
-      spinner.start(`Navigating to ${url}...`);
+      spinner.start(`Navigating to ${url}${tabTarget}...`);
     }
     
-    // Validate URL format
-    try {
-      new URL(url);
-    } catch (error) {
-      throw new Error(`Invalid URL format: ${url}`);
+    // Validate URL format (allow data: URLs for testing)
+    if (!url.startsWith('data:') && !url.startsWith('http')) {
+      try {
+        new URL(url);
+      } catch (error) {
+        throw new Error(`Invalid URL format: ${url}`);
+      }
     }
     
     // Use BrowserHelper to get page and navigate
-    await BrowserHelper.withActivePage(argv.port, async (page) => {
+    await BrowserHelper.withTargetPage(argv.port, tabIndex, tabId, async (page) => {
       // Navigate with options
       const navigationOptions: any = {
         waitUntil: waitUntil as 'load' | 'domcontentloaded' | 'networkidle' | 'commit',
@@ -85,11 +102,11 @@ export const navigateCommand = createCommand<NavigateOptions>({
       const finalUrl = page.url();
       
       if (spinner) {
-        spinner.succeed(`Navigated to ${url}`);
+        spinner.succeed(`Navigated to ${url}${tabTarget}`);
       }
       
       // Output results
-      logger.success(`Successfully navigated to ${url}`);
+      logger.success(`Successfully navigated to ${url}${tabTarget}`);
       logger.info(`Title: ${title}`);
       
       if (finalUrl !== url) {

@@ -45,6 +45,16 @@ export const consoleCommand = createCommand<ConsoleOptions>({
         type: 'boolean',
         default: false
       })
+      .option('tab-index', {
+        describe: 'Target specific tab by index (0-based)',
+        type: 'number',
+        alias: 'tab'
+      })
+      .option('tab-id', {
+        describe: 'Target specific tab by unique ID',
+        type: 'string'
+      })
+      .conflicts('tab-index', 'tab-id')
       .example('$0 console', 'Monitor all console messages')
       .example('$0 console --filter error', 'Monitor only error messages')
       .example('$0 console --once', 'Show current messages and exit');
@@ -53,93 +63,92 @@ export const consoleCommand = createCommand<ConsoleOptions>({
   handler: async (cmdContext) => {
     try {
       const { argv, logger } = cmdContext;
+      const tabIndex = argv['tab-index'] as number | undefined;
+      const tabId = argv['tab-id'] as string | undefined;
       
-      const page = await BrowserHelper.getActivePage(argv.port);
-      if (!page) {
-        throw new Error('No browser session. Use "playwright open" first');
-      }
-      
-      const messages: any[] = [];
-      
-      // Set up console message listener
-      page.on('console', msg => {
-        const type = msg.type();
-        const text = msg.text();
+      await BrowserHelper.withTargetPage(argv.port, tabIndex, tabId, async (page) => {
+        const messages: any[] = [];
         
-        // Apply filter if specified
-        if (argv.filter !== 'all' && type !== argv.filter) {
-          return;
+        // Set up console message listener
+        page.on('console', msg => {
+          const type = msg.type();
+          const text = msg.text();
+          
+          // Apply filter if specified
+          if (argv.filter !== 'all' && type !== argv.filter) {
+            return;
+          }
+          
+          const messageData = {
+            type,
+            text,
+            timestamp: new Date().toISOString()
+          };
+          
+          messages.push(messageData);
+          
+          if (argv.json) {
+            logger.info(JSON.stringify(messageData));
+          } else {
+            const prefix = 
+              type === 'error' ? chalk.red('❌') :
+              type === 'warning' ? chalk.yellow('⚠️') :
+              type === 'debug' ? chalk.gray('🐛') :
+              chalk.blue('ℹ️');
+            
+            const output = `${prefix} [${type}] ${text}`;
+            logger.info(output);
+          }
+        });
+        
+        if (!argv.json) {
+          logger.info('📋 Console output:');
         }
         
-        const messageData = {
-          type,
-          text,
-          timestamp: new Date().toISOString()
-        };
-        
-        messages.push(messageData);
-        
-        if (argv.json) {
-          logger.info(JSON.stringify(messageData));
-        } else {
-          const prefix = 
-            type === 'error' ? chalk.red('❌') :
-            type === 'warning' ? chalk.yellow('⚠️') :
-            type === 'debug' ? chalk.gray('🐛') :
-            chalk.blue('ℹ️');
+        if (argv.once) {
+          // Trigger a console message to ensure we get any buffered messages
+          try {
+            await page.evaluate('console.log("Playwright CLI connected")');
+          } catch (e) {
+            // Ignore evaluation errors in once mode
+          }
           
-          const output = `${prefix} [${type}] ${text}`;
-          logger.info(output);
+          // Wait briefly for messages to be captured
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          if (argv.json) {
+            logger.info(JSON.stringify({ messages }, null, 2));
+          } else {
+            if (messages.length === 0) {
+              logger.info('📋 No console messages captured');
+            } else {
+              logger.info(`📋 Captured ${messages.length} console message(s)`);
+            }
+          }
+        } else {
+          if (!argv.json) {
+            logger.info('Monitoring console... Press Ctrl+C to exit');
+          }
+          
+          // Announce connection
+          try {
+            await page.evaluate('console.log("Playwright CLI connected - monitoring console")');
+          } catch (e) {
+            // Ignore evaluation errors
+          }
+          
+          // Keep the process running
+          process.stdin.resume();
+          
+          // Handle graceful shutdown
+          process.on('SIGINT', () => {
+            if (argv.json && messages.length > 0) {
+              logger.info(JSON.stringify({ messages }, null, 2));
+            }
+            logger.info('\nStopped monitoring console');
+          });
         }
       });
-      
-      if (!argv.json) {
-        logger.info('📋 Console output:');
-      }
-      
-      if (argv.once) {
-        // Trigger a console message to ensure we get any buffered messages
-        try {
-          await page.evaluate('console.log("Playwright CLI connected")');
-        } catch (e) {
-          // Ignore evaluation errors in once mode
-        }
-        
-        // Wait briefly for messages to be captured
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        if (argv.json) {
-          logger.info(JSON.stringify({ messages }, null, 2));
-        } else {
-          if (messages.length === 0) {
-            logger.info('📋 No console messages captured');
-          } else {
-            logger.info(`📋 Captured ${messages.length} console message(s)`);
-          }
-        }
-      } else {
-        if (!argv.json) {
-          logger.info('Monitoring console... Press Ctrl+C to exit');
-        }
-        
-        // Announce connection
-        try {
-          await page.evaluate('console.log("Playwright CLI connected - monitoring console")');
-        } catch (e) {
-          // Ignore evaluation errors
-        }
-        
-        // Keep the process running
-        process.stdin.resume();
-        
-        // Handle graceful shutdown
-        process.on('SIGINT', () => {
-          if (argv.json && messages.length > 0) {
-            logger.info(JSON.stringify({ messages }, null, 2));
-          }
-          logger.info('\nStopped monitoring console');
-        });
-      }
     } catch (error: any) {
       cmdContext.logger.error(`Console monitoring failed: ${error.message}`);
       throw new Error("Command failed");

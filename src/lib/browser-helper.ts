@@ -201,6 +201,136 @@ export class BrowserHelper {
   }
 
   /**
+   * Gets the unique CDP target ID for a page.
+   * Each browser tab has a unique, persistent ID from Chrome DevTools Protocol.
+   *
+   * @param page - The page to get the ID for
+   * @returns Promise resolving to the unique tab ID
+   *
+   * @example
+   * ```typescript
+   * const pages = await BrowserHelper.getPages(9222);
+   * const tabId = await BrowserHelper.getPageId(pages[0]);
+   * console.log(`Tab ID: ${tabId}`); // "71A23E3014E274B134EB46BA2C2AA755"
+   * ```
+   */
+  static async getPageId(page: Page): Promise<string> {
+    const cdp = await page.context().newCDPSession(page);
+    try {
+      const targetInfo = await cdp.send('Target.getTargetInfo');
+      return targetInfo.targetInfo.targetId;
+    } finally {
+      await cdp.detach();
+    }
+  }
+
+  /**
+   * Finds a page by its unique CDP target ID.
+   * Searches through all pages in all contexts to find the matching ID.
+   *
+   * @param port - The Chrome debugging port
+   * @param tabId - The unique tab ID to search for
+   * @returns Promise resolving to the Page instance or null if not found
+   *
+   * @example
+   * ```typescript
+   * const page = await BrowserHelper.findPageById(9222, "71A23E3014E274B134EB46BA2C2AA755");
+   * if (page) {
+   *   await page.click("#button");
+   * }
+   * ```
+   */
+  static async findPageById(port: number, tabId: string): Promise<Page | null> {
+    const pages = await this.getPages(port);
+    
+    for (const page of pages) {
+      try {
+        const pageId = await this.getPageId(page);
+        if (pageId === tabId) {
+          return page;
+        }
+      } catch (error) {
+        // Skip this page if we can't get its ID
+        continue;
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Executes an action with a specific page and automatically disconnects.
+   * Supports targeting by either index or unique tab ID.
+   * If neither is provided, uses the active page.
+   *
+   * @param port - The Chrome debugging port
+   * @param tabIndex - Zero-based index of the tab (optional)
+   * @param tabId - Unique tab ID from CDP (optional)
+   * @param action - Async function to execute with the page
+   * @returns Promise resolving to the action's return value
+   * @throws {Error} When the specified tab doesn't exist or both tabIndex and tabId are provided
+   *
+   * @example
+   * ```typescript
+   * // Use by index
+   * await BrowserHelper.withTargetPage(9222, 1, undefined, async (page) => {
+   *   return await page.title();
+   * });
+   * 
+   * // Use by unique ID
+   * await BrowserHelper.withTargetPage(9222, undefined, "71A23E3014E274B134EB46BA2C2AA755", async (page) => {
+   *   return await page.title();
+   * });
+   * 
+   * // Use active page
+   * await BrowserHelper.withTargetPage(9222, undefined, undefined, async (page) => {
+   *   return await page.title();
+   * });
+   * ```
+   */
+  static async withTargetPage<T>(
+    port: number,
+    tabIndex: number | undefined,
+    tabId: string | undefined,
+    action: (page: Page) => Promise<T>
+  ): Promise<T> {
+    // Validate arguments
+    if (tabIndex !== undefined && tabId !== undefined) {
+      throw new Error('Cannot specify both tabIndex and tabId. Use one or the other.');
+    }
+
+    // If neither specified, use active page
+    if (tabIndex === undefined && tabId === undefined) {
+      return this.withActivePage(port, action);
+    }
+
+    return this.withBrowser(port, async (browser) => {
+      let targetPage: Page | null = null;
+
+      if (tabId !== undefined) {
+        // Find by unique ID
+        targetPage = await this.findPageById(port, tabId);
+        if (!targetPage) {
+          throw new Error(`Tab with ID "${tabId}" not found`);
+        }
+      } else if (tabIndex !== undefined) {
+        // Find by index
+        const pages = await this.getPages(port);
+        if (tabIndex < 0 || tabIndex >= pages.length) {
+          throw new Error(`Tab index ${tabIndex} is out of bounds. Available tabs: 0-${pages.length - 1}`);
+        }
+        targetPage = pages[tabIndex];
+      }
+
+      if (!targetPage) {
+        throw new Error('Unable to find target page');
+      }
+
+      return await action(targetPage);
+    });
+  }
+
+  /**
    * Retrieves all browser contexts from the connected browser.
    * Each context represents an isolated browsing session.
    *

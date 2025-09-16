@@ -47,17 +47,29 @@ export const dragCommand = createCommand<DragOptions>({
         describe: 'Force drag even if elements are not visible',
         type: 'boolean',
         default: false
-      });
+      })
+      .option('tab-index', {
+        describe: 'Target specific tab by index (0-based)',
+        type: 'number',
+        alias: 'tab'
+      })
+      .option('tab-id', {
+        describe: 'Target specific tab by unique ID',
+        type: 'string'
+      })
+      .conflicts('tab-index', 'tab-id');
   },
   
   handler: async ({ argv, logger, spinner }) => {
     const { selector, target, port } = argv;
+    const tabIndex = argv['tab-index'] as number | undefined;
+    const tabId = argv['tab-id'] as string | undefined;
     
     if (spinner) {
       spinner.text = `Dragging from ${selector} to ${target}...`;
     }
     
-    await BrowserHelper.withActivePage(port, async (page) => {
+    await BrowserHelper.withTargetPage(port, tabIndex, tabId, async (page) => {
       await page.dragAndDrop(selector, target, { timeout: 5000 });
     });
     

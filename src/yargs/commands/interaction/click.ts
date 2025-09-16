@@ -34,6 +34,15 @@ export const clickCommand = createCommand<ClickOptions>({
         default: 9222,
         alias: 'p'
       })
+      .option('tab-index', {
+        describe: 'Target specific tab by index (0-based)',
+        type: 'number',
+        alias: 'tab'
+      })
+      .option('tab-id', {
+        describe: 'Target specific tab by unique ID',
+        type: 'string'
+      })
       .option('timeout', {
         describe: 'Timeout in milliseconds',
         type: 'number',
@@ -79,11 +88,14 @@ export const clickCommand = createCommand<ClickOptions>({
         describe: 'Hold Ctrl (Windows/Linux) or Meta (macOS) key while clicking',
         type: 'boolean',
         default: false
-      });
+      })
+      .conflicts('tab-index', 'tab-id'); // Cannot use both
   },
   
   handler: async ({ argv, logger, spinner }) => {
     const { selector, port, timeout, force, double, button } = argv;
+    const tabIndex = argv['tab-index'] as number | undefined;
+    const tabId = argv['tab-id'] as string | undefined;
     
     // Build modifiers array from options
     const modifiers: Array<'Shift' | 'Control' | 'Alt' | 'Meta' | 'ControlOrMeta'> = [];
@@ -95,12 +107,14 @@ export const clickCommand = createCommand<ClickOptions>({
     
     const clickType = double ? 'Double-clicking' : 'Clicking';
     const modifierText = modifiers.length > 0 ? ` (${modifiers.join('+')})` : '';
+    const tabTarget = tabIndex !== undefined ? ` in tab ${tabIndex}` : 
+                     tabId !== undefined ? ` in tab ${tabId.slice(0, 8)}...` : '';
     
     if (spinner) {
-      spinner.text = `${clickType}${modifierText} ${selector}...`;
+      spinner.text = `${clickType}${modifierText} ${selector}${tabTarget}...`;
     }
     
-    await BrowserHelper.withActivePage(port, async (page) => {
+    await BrowserHelper.withTargetPage(port, tabIndex, tabId, async (page) => {
       let actualSelector = selector;
       
       // Check if it's a ref selector

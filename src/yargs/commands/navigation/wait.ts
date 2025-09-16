@@ -54,6 +54,16 @@ export const waitCommand = createCommand<WaitArgs>({
         type: 'string',
         choices: ['load', 'domcontentloaded', 'networkidle']
       })
+      .option('tab-index', {
+        describe: 'Target specific tab by index (0-based)',
+        type: 'number',
+        alias: 'tab'
+      })
+      .option('tab-id', {
+        describe: 'Target specific tab by unique ID',
+        type: 'string'
+      })
+      .conflicts('tab-index', 'tab-id')
       .example('$0 wait "#button"', 'Wait for element to be visible')
       .example('$0 wait "#button" --state hidden', 'Wait for element to be hidden')
       .example('$0 wait --timeout 10000', 'Wait for 10 seconds')
@@ -62,6 +72,8 @@ export const waitCommand = createCommand<WaitArgs>({
   
   handler: async ({ argv, spinner, logger }) => {
     let { selector, timeout, state, waitFor } = argv;
+    const tabIndex = argv['tab-index'] as number | undefined;
+    const tabId = argv['tab-id'] as string | undefined;
     
     // Check if the selector is actually a numeric timeout value
     if (selector && /^\d+$/.test(selector)) {
@@ -80,7 +92,7 @@ export const waitCommand = createCommand<WaitArgs>({
       }
     }
     
-    await BrowserHelper.withActivePage(argv.port, async (page) => {
+    await BrowserHelper.withTargetPage(argv.port, tabIndex, tabId, async (page) => {
       try {
         if (selector) {
           // Wait for element with specific state

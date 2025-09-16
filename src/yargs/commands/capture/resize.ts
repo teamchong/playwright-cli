@@ -9,6 +9,8 @@ interface ResizeArgs extends Arguments {
   height: string;
   port: number;
   timeout: number;
+  'tab-index'?: number;
+  'tab-id'?: string;
 }
 
 export const resizeCommand: CommandModule<{}, ResizeArgs> = {
@@ -38,27 +40,36 @@ export const resizeCommand: CommandModule<{}, ResizeArgs> = {
         describe: 'Timeout in milliseconds',
         type: 'number',
         default: 30000
-      });
+      })
+      .option('tab-index', {
+        describe: 'Target specific tab by index (0-based)',
+        type: 'number',
+        alias: 'tab'
+      })
+      .option('tab-id', {
+        describe: 'Target specific tab by unique ID',
+        type: 'string'
+      })
+      .conflicts('tab-index', 'tab-id');
   },
   
   handler: async (argv) => {
+    const tabIndex = argv['tab-index'] as number | undefined;
+    const tabId = argv['tab-id'] as string | undefined;
+    
     try {
-      const page = await BrowserHelper.getActivePage(argv.port);
+      await BrowserHelper.withTargetPage(argv.port, tabIndex, tabId, async (page) => {
+        const w = parseInt(argv.width);
+        const h = parseInt(argv.height);
 
-      if (!page) {
-        throw new Error('No active page. Use "playwright open" first');
-      }
+        if (isNaN(w) || isNaN(h)) {
+          throw new Error('Width and height must be numbers');
+        }
 
-      const w = parseInt(argv.width);
-      const h = parseInt(argv.height);
-
-      if (isNaN(w) || isNaN(h)) {
-        throw new Error('Width and height must be numbers');
-      }
-
-      await page.setViewportSize({ width: w, height: h });
-      logger.success(`Resized window to ${w}x${h}`);
-      // Exit cleanly
+        await page.setViewportSize({ width: w, height: h });
+        logger.success(`Resized window to ${w}x${h}`);
+        console.log(`Resized window to ${w}x${h}`);
+      });
 
       return;
 

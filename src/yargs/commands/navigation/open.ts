@@ -149,6 +149,8 @@ export const openCommand = createCommand<OpenOptions>({
           logger.info(`Timezone set to: ${timezone}`);
         }
         
+        let tabId: string | undefined;
+        
         // Handle URL navigation
         if (url && typeof url === 'string') {
           const fullUrl = url.includes('://') ? url : `https://${url}`;
@@ -158,23 +160,43 @@ export const openCommand = createCommand<OpenOptions>({
             const newContext = await browser.newContext();
             const page = await newContext.newPage();
             await page.goto(fullUrl);
+            tabId = await BrowserHelper.getPageId(page);
             logger.info(`Opened new window: ${fullUrl}`);
+            logger.info(`Tab ID: ${tabId}`);
           } else if (newTab) {
             // Create new tab in existing context
             const page = await context.newPage();
             await page.goto(fullUrl);
+            tabId = await BrowserHelper.getPageId(page);
             logger.info(`Opened new tab: ${fullUrl}`);
+            logger.info(`Tab ID: ${tabId}`);
           } else {
             // Use existing tab or create new one
             const pages = context.pages();
             if (pages.length > 0) {
               await pages[0].goto(fullUrl);
+              tabId = await BrowserHelper.getPageId(pages[0]);
               logger.info(`Navigated to: ${fullUrl}`);
+              logger.info(`Tab ID: ${tabId}`);
             } else {
               const page = await context.newPage();
               await page.goto(fullUrl);
+              tabId = await BrowserHelper.getPageId(page);
               logger.info(`Opened new tab: ${fullUrl}`);
+              logger.info(`Tab ID: ${tabId}`);
             }
+          }
+        } else {
+          // No URL specified, just ensure we have a tab and return its ID
+          const pages = context.pages();
+          if (pages.length > 0) {
+            tabId = await BrowserHelper.getPageId(pages[0]);
+            logger.info(`Tab ID: ${tabId}`);
+          } else {
+            const page = await context.newPage();
+            tabId = await BrowserHelper.getPageId(page);
+            logger.info(`Created new tab`);
+            logger.info(`Tab ID: ${tabId}`);
           }
         }
         
@@ -193,7 +215,8 @@ export const openCommand = createCommand<OpenOptions>({
             newWindow: newWindow || false,
             device: device || null,
             geolocation: geolocation || null,
-            timezone: timezone || null
+            timezone: timezone || null,
+            tabId: tabId || null
           });
         }
       });

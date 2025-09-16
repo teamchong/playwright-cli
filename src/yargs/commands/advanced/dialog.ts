@@ -59,8 +59,8 @@ export const dialogCommand = createCommand<DialogOptions>({
       // Set up a promise to wait for dialog
       const dialogPromise = new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
-          reject(new Error('No dialog appeared within 5000ms'));
-        }, 5000);
+          reject(new Error('No dialog appeared within 2000ms'));
+        }, 2000);
         
         page.once('dialog', async dialog => {
           clearTimeout(timeout);
@@ -76,9 +76,11 @@ export const dialogCommand = createCommand<DialogOptions>({
                   `✅ Accepted dialog${argv.text ? ` with text: ${argv.text}` : ''}`
                 )
               );
+              console.log(`Accepted dialog${argv.text ? ` with text: ${argv.text}` : ''}`);
             } else {
               await dialog.dismiss();
               logger.success('Dismissed dialog');
+              console.log('Dismissed dialog');
             }
             resolve();
           } catch (err) {

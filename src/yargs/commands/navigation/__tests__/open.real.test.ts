@@ -14,18 +14,13 @@ describe('open command - REAL INTEGRATION TEST', () => {
       console.error('Build failed:', e);
     }
     
-    // Kill any existing Chrome instances
-    try {
-      execSync('pkill -f "Chrome.*remote-debugging-port=9222"', { stdio: 'ignore' });
-    } catch {}
+    // Global browser session will be used
     await new Promise(resolve => setTimeout(resolve, 1000));
   });
 
   afterAll(async () => {
-    // Clean up browser after tests
-    try {
-      execSync(`${CLI_PATH} close`, { stdio: 'ignore' });
-    } catch {}
+    // Global teardown handles browser cleanup
+    // Don't close browser here as it interferes with other tests
   });
 
   it('should launch browser and navigate to URL', async () => {
@@ -44,17 +39,18 @@ describe('open command - REAL INTEGRATION TEST', () => {
 
   it('should connect to existing browser session', async () => {
     // Browser should already be open from previous test
-    const output = execSync(`${CLI_PATH} open https://google.com`, {
+    const output = execSync(`${CLI_PATH} open --new-tab https://google.com`, {
       encoding: 'utf8'
     });
     
     // Check that it navigated (meaning it connected to existing browser)
-    expect(output).toContain('Navigated to');
+    expect(output).toContain('Opened new tab');
     expect(output).toContain('google.com');
     
-    // Verify new page was opened
+    // Verify both pages exist
     const listOutput = execSync(`${CLI_PATH} list`, { encoding: 'utf8' });
     expect(listOutput).toContain('google.com');
+    expect(listOutput).toContain('example.com');
   }, 30000);
 
   it('should handle --new-tab flag', async () => {

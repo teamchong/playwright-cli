@@ -41,23 +41,38 @@ export const hoverCommand = createCommand<SelectorOptions>({
         describe: 'Force hover even if element is not visible',
         type: 'boolean',
         default: false
-      });
+      })
+      .option('tab-index', {
+        describe: 'Target specific tab by index (0-based)',
+        type: 'number',
+        alias: 'tab'
+      })
+      .option('tab-id', {
+        describe: 'Target specific tab by unique ID',
+        type: 'string'
+      })
+      .conflicts('tab-index', 'tab-id');
   },
   
   handler: async ({ argv, logger, spinner }) => {
     const { selector, port, timeout, force } = argv;
+    const tabIndex = argv['tab-index'] as number | undefined;
+    const tabId = argv['tab-id'] as string | undefined;
+    
+    const tabTarget = tabIndex !== undefined ? ` in tab ${tabIndex}` : 
+                     tabId !== undefined ? ` in tab ${tabId.slice(0, 8)}...` : '';
     
     if (spinner) {
-      spinner.text = `Hovering over ${selector}...`;
+      spinner.text = `Hovering over ${selector}${tabTarget}...`;
     }
     
-    await BrowserHelper.withActivePage(port, async (page) => {
+    await BrowserHelper.withTargetPage(port, tabIndex, tabId, async (page) => {
       await page.hover(selector, {
         timeout,
         force
       });
     });
     
-    logger.success(`Hovered over ${selector}`);
+    logger.success(`Hovered over ${selector}${tabTarget}`);
   }
 });

@@ -10,6 +10,8 @@ interface SnapshotArgs extends Arguments {
   timeout: number;
   json?: boolean;
   full?: boolean;
+  'tab-index'?: number;
+  'tab-id'?: string;
 }
 
 /**
@@ -49,12 +51,25 @@ export const snapshotCommand: CommandModule<{}, SnapshotArgs> = {
       .option('full', {
         describe: 'Show full accessibility tree (not just interactive)',
         type: 'boolean'
-      });
+      })
+      .option('tab-index', {
+        describe: 'Target specific tab by index (0-based)',
+        type: 'number',
+        alias: 'tab'
+      })
+      .option('tab-id', {
+        describe: 'Target specific tab by unique ID',
+        type: 'string'
+      })
+      .conflicts('tab-index', 'tab-id');
   },
   
   handler: async (argv) => {
+    const tabIndex = argv['tab-index'] as number | undefined;
+    const tabId = argv['tab-id'] as string | undefined;
+    
     try {
-      await BrowserHelper.withActivePage(argv.port, async page => {
+      await BrowserHelper.withTargetPage(argv.port, tabIndex, tabId, async page => {
         const snapshot = await page.accessibility.snapshot();
 
         if (argv.full) {

@@ -38,20 +38,35 @@ export const fillCommand = createCommand<FillOptions>({
         describe: 'Timeout in milliseconds',
         type: 'number',
         default: 5000
-      });
+      })
+      .option('tab-index', {
+        describe: 'Target specific tab by index (0-based)',
+        type: 'number',
+        alias: 'tab'
+      })
+      .option('tab-id', {
+        describe: 'Target specific tab by unique ID',
+        type: 'string'
+      })
+      .conflicts('tab-index', 'tab-id');
   },
   
   handler: async ({ argv, logger, spinner }) => {
     const { fields, port, timeout } = argv;
+    const tabIndex = argv['tab-index'] as number | undefined;
+    const tabId = argv['tab-id'] as string | undefined;
+    
+    const tabTarget = tabIndex !== undefined ? ` in tab ${tabIndex}` : 
+                     tabId !== undefined ? ` in tab ${tabId.slice(0, 8)}...` : '';
     
     if (spinner) {
-      spinner.text = `Filling ${fields.length} field(s)...`;
+      spinner.text = `Filling ${fields.length} field(s)${tabTarget}...`;
     }
     
     let filledCount = 0;
     const errors: string[] = [];
     
-    await BrowserHelper.withActivePage(port, async (page) => {
+    await BrowserHelper.withTargetPage(port, tabIndex, tabId, async (page) => {
       for (const field of fields) {
         const [selector, ...valueParts] = field.split('=');
         const value = valueParts.join('='); // Handle values with = in them
@@ -75,6 +90,6 @@ export const fillCommand = createCommand<FillOptions>({
       errors.forEach(error => logger.warn(`  ⚠️  ${error}`));
     }
     
-    logger.success(`Filled ${filledCount} field(s)`);
+    logger.success(`Filled ${filledCount} field(s)${tabTarget}`);
   }
 });

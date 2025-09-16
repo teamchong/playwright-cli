@@ -98,11 +98,21 @@ export const tabsCommand = createCommand<TabOptions>({
             const title = await page.title() || 'Untitled';
             const displayTitle = pageUrl === 'about:blank' ? 'New Tab' : title;
             
+            // Get unique tab ID
+            let tabId = '';
+            try {
+              tabId = await BrowserHelper.getPageId(page);
+            } catch (error) {
+              tabId = 'unknown';
+            }
+            
             logger.info(`  ${i}: ${displayTitle}`);
             logger.info(`     ${pageUrl}`);
+            logger.info(`     ID: ${tabId}`);
             
             tabInfo.push({
               index: i,
+              id: tabId,
               title: displayTitle,
               url: pageUrl
             });
@@ -133,17 +143,22 @@ export const tabsCommand = createCommand<TabOptions>({
             await newPage.goto(url);
           }
           
+          // Get the unique tab ID
+          const tabId = await BrowserHelper.getPageId(newPage);
+          
           if (spinner) {
             spinner.succeed(`Created new tab${url ? ` with ${url}` : ''}`);
           }
           
           logger.success(`Created new tab${url ? ` with ${url}` : ''}`);
+          logger.info(`Tab ID: ${tabId}`);
           
           if (argv.json) {
             logger.json({
               success: true,
               action: 'new',
-              url: url || 'about:blank'
+              url: url || 'about:blank',
+              tabId: tabId
             });
           }
         });

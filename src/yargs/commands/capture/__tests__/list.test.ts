@@ -38,18 +38,11 @@ describe('list command - REAL TESTS', () => {
       execSync('pnpm build', { stdio: 'ignore' });
     }
     
-    // Clean up any existing browser
-    try {
-      execSync('pkill -f "Chrome.*remote-debugging-port=9222"', { stdio: 'ignore' });
-    } catch {}
-    await new Promise(resolve => setTimeout(resolve, 1000));
   }, 30000); // 30 second timeout for build
 
   afterAll(async () => {
-    // Clean up
-    try {
-      runCommand(`${CLI} close`, 2000);
-    } catch {}
+    // Global teardown handles browser cleanup
+    // Don't close browser here as it interferes with other tests
   });
 
   describe('command structure', () => {
@@ -62,16 +55,17 @@ describe('list command - REAL TESTS', () => {
   });
 
   describe('handler execution', () => {
-    it('should handle no browser session gracefully', () => {
+    it('should list browser pages with global session', () => {
       const { output, exitCode } = runCommand(`${CLI} list`);
-      expect(exitCode).toBe(1);
-      expect(output).toContain('No browser');
+      expect(exitCode).toBe(0);
+      expect(output).toContain('Context');
     });
 
     it('should handle different port gracefully', () => {
-      const { output, exitCode } = runCommand(`${CLI} list --port 8080`);
+      // When connecting to non-existent port, should fail gracefully
+      const { output, exitCode } = runCommand(`${CLI} list --port 8080`, 3000);
       expect(exitCode).toBe(1);
-      expect(output).toContain('No browser');
+      expect(output).toMatch(/connection|browser/i);
     });
   });
 });

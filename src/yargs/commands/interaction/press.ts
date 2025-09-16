@@ -41,17 +41,32 @@ export const pressCommand = createCommand<PressOptions>({
       .option('selector', {
         describe: 'Optional selector to focus before pressing key',
         type: 'string'
-      });
+      })
+      .option('tab-index', {
+        describe: 'Target specific tab by index (0-based)',
+        type: 'number',
+        alias: 'tab'
+      })
+      .option('tab-id', {
+        describe: 'Target specific tab by unique ID',
+        type: 'string'
+      })
+      .conflicts('tab-index', 'tab-id');
   },
   
   handler: async ({ argv, logger, spinner }) => {
     const { key, port, selector } = argv;
+    const tabIndex = argv['tab-index'] as number | undefined;
+    const tabId = argv['tab-id'] as string | undefined;
+    
+    const tabTarget = tabIndex !== undefined ? ` in tab ${tabIndex}` : 
+                     tabId !== undefined ? ` in tab ${tabId.slice(0, 8)}...` : '';
     
     if (spinner) {
-      spinner.text = `Pressing key: ${key}...`;
+      spinner.text = `Pressing key: ${key}${tabTarget}...`;
     }
     
-    await BrowserHelper.withActivePage(port, async (page) => {
+    await BrowserHelper.withTargetPage(port, tabIndex, tabId, async (page) => {
       // Focus on selector if provided
       if (selector && typeof selector === 'string') {
         await page.focus(selector);
@@ -60,6 +75,6 @@ export const pressCommand = createCommand<PressOptions>({
       await page.keyboard.press(key);
     });
     
-    logger.success(`Pressed key: ${key}`);
+    logger.success(`Pressed key: ${key}${tabTarget}`);
   }
 });

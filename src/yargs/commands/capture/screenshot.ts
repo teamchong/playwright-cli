@@ -10,6 +10,8 @@ interface ScreenshotArgs extends Arguments {
   timeout: number;
   fullPage?: boolean;
   selector?: string;
+  'tab-index'?: number;
+  'tab-id'?: string;
 }
 
 export const screenshotCommand: CommandModule<{}, ScreenshotArgs> = {
@@ -43,35 +45,43 @@ export const screenshotCommand: CommandModule<{}, ScreenshotArgs> = {
       .option('selector', {
         describe: 'Capture specific element',
         type: 'string'
-      });
+      })
+      .option('tab-index', {
+        describe: 'Target specific tab by index (0-based)',
+        type: 'number',
+        alias: 'tab'
+      })
+      .option('tab-id', {
+        describe: 'Target specific tab by unique ID',
+        type: 'string'
+      })
+      .conflicts('tab-index', 'tab-id');
   },
   
   handler: async (argv) => {
     const spinner = ora('Taking screenshot...').start();
+    const tabIndex = argv['tab-index'] as number | undefined;
+    const tabId = argv['tab-id'] as string | undefined;
 
     try {
-      const page = await BrowserHelper.getActivePage(argv.port);
-      if (!page) {
-        throw new Error('No browser session. Use "playwright open" first');
-      }
+      await BrowserHelper.withTargetPage(argv.port, tabIndex, tabId, async (page) => {
+        const screenshotOptions: any = {
+          path: argv.path,
+          fullPage: !!argv.fullPage
+        };
 
-      const screenshotOptions: any = {
-        path: argv.path,
-        fullPage: !!argv.fullPage
-      };
-
-      if (argv.selector) {
-        const element = await page.$(argv.selector);
-        if (!element) {
-          throw new Error(`Element not found: ${argv.selector}`);
+        if (argv.selector) {
+          const element = await page.$(argv.selector);
+          if (!element) {
+            throw new Error(`Element not found: ${argv.selector}`);
+          }
+          await element.screenshot({ path: argv.path });
+        } else {
+          await page.screenshot(screenshotOptions);
         }
-        await element.screenshot({ path: argv.path });
-      } else {
-        await page.screenshot(screenshotOptions);
-      }
 
-      spinner.succeed(chalk.green(`✅ Screenshot saved to ${argv.path}`));
-      // Exit cleanly
+        spinner.succeed(chalk.green(`✅ Screenshot saved to ${argv.path}`));
+      });
 
       return;
 
