@@ -16,7 +16,7 @@
     "build:windows": "pnpm run build:ts && pkg dist/index.js --targets node18-win-x64 --output playwright.exe",
     "build:linux": "pnpm run build:ts && pkg dist/index.js --targets node18-linux-x64 --output playwright",
     "build:all": "pnpm run build:ts && pkg dist/index.js --targets node18-macos-arm64,node18-win-x64,node18-linux-x64 --output playwright",
-    "install": "pnpm run build && mkdir -p ~/.local/bin && cp playwright ~/.local/bin/",
+    "install:local": "pnpm run build && mkdir -p ~/.local/bin && cp playwright ~/.local/bin/",
     "test": "vitest run --reporter=verbose --no-file-parallelism",
     "test:coverage": "vitest run --coverage --reporter=verbose --no-file-parallelism",
     "test:watch": "vitest --reporter=verbose --no-file-parallelism",
