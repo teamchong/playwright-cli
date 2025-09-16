@@ -14,12 +14,12 @@ export const consoleCommand = createCommand<ConsoleOptions>({
   metadata: {
     name: 'console',
     category: 'advanced',
-    description: 'Monitor browser console output',
+    description: 'Capture browser console output',
     aliases: [],
   },
 
   command: 'console',
-  describe: 'Monitor browser console output',
+  describe: 'Capture browser console output',
 
   builder: yargs => {
     return yargs
@@ -28,11 +28,6 @@ export const consoleCommand = createCommand<ConsoleOptions>({
         type: 'number',
         default: 9222,
         alias: 'p',
-      })
-      .option('once', {
-        describe: 'Show current console messages and exit',
-        type: 'boolean',
-        default: false,
       })
       .option('filter', {
         describe: 'Filter messages by type',
@@ -108,56 +103,51 @@ export const consoleCommand = createCommand<ConsoleOptions>({
             }
           })
 
-          if (!argv.json) {
-            logger.info('📋 Console output:')
+          // Get tab ID for reference
+          const tabId = BrowserHelper.getPageId(page)
+          
+          // Trigger a console message to capture any buffered messages
+          try {
+            await page.evaluate('console.log("Playwright CLI snapshot")')
+          } catch (e) {
+            // Ignore evaluation errors
           }
 
-          if (argv.once) {
-            // Trigger a console message to ensure we get any buffered messages
-            try {
-              await page.evaluate('console.log("Playwright CLI connected")')
-            } catch (e) {
-              // Ignore evaluation errors in once mode
-            }
+          // Wait briefly for messages to be captured (500ms)
+          await new Promise(resolve => setTimeout(resolve, 500))
 
-            // Wait briefly for messages to be captured
-            await new Promise(resolve => setTimeout(resolve, 1000))
+          // Filter out our own test message
+          const filteredMessages = messages.filter(m => m.text !== 'Playwright CLI snapshot')
 
-            if (argv.json) {
-              logger.info(JSON.stringify({ messages }, null, 2))
-            } else {
-              if (messages.length === 0) {
-                logger.info('📋 No console messages captured')
-              } else {
-                logger.info(`📋 Captured ${messages.length} console message(s)`)
-              }
-            }
-          } else {
-            if (!argv.json) {
-              logger.info('Monitoring console... Press Ctrl+C to exit')
-            }
-
-            // Announce connection
-            try {
-              await page.evaluate(
-                'console.log("Playwright CLI connected - monitoring console")'
-              )
-            } catch (e) {
-              // Ignore evaluation errors
-            }
-
-            // Keep the process running
-            process.stdin.resume()
-
-            // Handle graceful shutdown
-            process.on('SIGINT', () => {
-              if (argv.json && messages.length > 0) {
-                console.log(JSON.stringify({ messages }, null, 2))
-              } else {
-                console.log('\nStopped monitoring console')
-              }
-              process.exit(0)  // Actually exit the process!
+          if (argv.json) {
+            logger.json({
+              success: true,
+              tabId,
+              messages: filteredMessages,
+              count: filteredMessages.length,
+              timestamp: new Date().toISOString()
             })
+          } else {
+            logger.success(`✅ Console snapshot for tab: ${tabId}`)
+            if (filteredMessages.length === 0) {
+              logger.info('📋 No console messages')
+            } else {
+              logger.info(`📋 ${filteredMessages.length} message(s) captured:`)
+              filteredMessages.slice(0, 10).forEach(msg => {
+                const prefix =
+                  msg.type === 'error'
+                    ? chalk.red('❌')
+                    : msg.type === 'warning'
+                      ? chalk.yellow('⚠️')
+                      : msg.type === 'debug'
+                        ? chalk.gray('🐛')
+                        : chalk.blue('ℹ️')
+                logger.info(`  ${prefix} [${msg.type}] ${msg.text}`)
+              })
+              if (filteredMessages.length > 10) {
+                logger.info(`  ... and ${filteredMessages.length - 10} more`)
+              }
+            }
           }
         }
       )
