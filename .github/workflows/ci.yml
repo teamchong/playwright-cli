@@ -10,6 +10,8 @@ jobs:
   test:
     name: Test and Code Quality
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.48.0-jammy
     
     steps:
     - name: Checkout repository
@@ -35,9 +37,6 @@ jobs:
       run: |
         bun install
         pnpm install
-    
-    - name: Install Playwright browsers
-      run: pnpm exec playwright install chromium
     
     - name: TypeScript type checking
       run: pnpm run typecheck
