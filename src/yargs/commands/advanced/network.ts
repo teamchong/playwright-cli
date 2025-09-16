@@ -1,8 +1,8 @@
 /**
  * Network Command - Yargs Implementation
  *
- * Monitors network requests and responses in real-time.
- * Provides filtering and JSON output options for analysis.
+ * Captures network requests and responses snapshot and returns immediately.
+ * Returns tab ID and network activity for reference.
  */
 
 import chalk from 'chalk'
@@ -44,11 +44,6 @@ export const networkCommand = createCommand<NetworkOptions>({
         describe: 'Filter by status code',
         type: 'number',
         alias: 's',
-      })
-      .option('once', {
-        describe: 'Capture current requests and exit',
-        type: 'boolean',
-        default: false,
       })
       .option('json', {
         describe: 'Output as JSON',
@@ -179,53 +174,37 @@ export const networkCommand = createCommand<NetworkOptions>({
         requests.push(failureInfo)
       })
 
-      if (argv.once) {
-        // Wait briefly for any pending requests
-        await new Promise(resolve => setTimeout(resolve, 1000))
-
-        if (argv.json) {
-          logger.info(JSON.stringify({ requests }, null, 2))
-        } else {
-          if (requests.length === 0) {
-            logger.info('📡 No network requests captured')
-            console.log('No network requests captured')
-          } else {
-            logger.info(`📡 Captured ${requests.length} network request(s)`)
-            console.log(`Captured ${requests.length} network request(s)`)
-          }
-        }
+      // Get tab ID for reference  
+      const tabId = BrowserHelper.getPageId(page)
+      
+      // Capture current network state and exit immediately
+      // Wait briefly to capture any active requests (500ms)
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      if (argv.json) {
+        logger.json({
+          success: true,
+          tabId,
+          requests,
+          count: requests.length,
+          timestamp: new Date().toISOString()
+        })
       } else {
-        if (!argv.json) {
-          logger.info(
-            chalk.yellow(
-              '📡 Monitoring network requests... Press Ctrl+C to stop'
-            )
-          )
-        }
-
-        // Handle graceful shutdown
-        process.on('SIGINT', () => {
-          if (argv.json) {
-            console.log(JSON.stringify({ requests }, null, 2))
-          } else {
-            console.log('\nStopped monitoring network')
+        logger.success(`✅ Network snapshot for tab: ${tabId}`)
+        if (requests.length === 0) {
+          logger.info(`📡 No active network requests`)
+        } else {
+          logger.info(`📡 ${requests.length} request(s) captured:`)
+          requests.slice(0, 10).forEach(req => {
+            const method = req.request?.method || 'GET'
+            const status = req.response?.status
+            const statusColor = status >= 400 ? chalk.red : status >= 300 ? chalk.yellow : chalk.green
+            logger.info(`  ${method} ${req.url} ${status ? statusColor(status) : ''}`);
+          })
+          if (requests.length > 10) {
+            logger.info(`  ... and ${requests.length - 10} more`)
           }
-          process.exit(0)  // Actually exit the process!
-        })
-
-        // Keep monitoring until interrupted or timeout in tests
-        await new Promise(resolve => {
-          // Add a timeout for test scenarios to prevent hanging
-          setTimeout(() => {
-            if (argv.json) {
-              logger.info(JSON.stringify({ requests }, null, 2))
-            } else {
-              logger.info(`📡 Monitored ${requests.length} network request(s)`)
-              console.log(`Monitored ${requests.length} network request(s)`)
-            }
-            resolve(undefined)
-          }, 3000) // 3 second timeout for tests
-        })
+        }
       }
     } catch (error: any) {
       cmdContext.logger.error(`Failed to monitor network: ${error.message}`)
