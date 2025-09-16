@@ -315,9 +315,10 @@ export function modifierMiddleware<T extends BaseCommandOptions>(
   if ((argv as any).ctrl === true) modifiers.push('Control')
   if ((argv as any).alt === true) modifiers.push('Alt')
   if ((argv as any).meta === true) modifiers.push('Meta')
-  if ((argv as any)['ctrl-or-meta'] === true) modifiers.push('ControlOrMeta')
+  if ((argv as any)['ctrl-or-meta'] === true)
+    modifiers.push('ControlOrMeta')
 
-  // Add modifiers array to argv
+    // Add modifiers array to argv
   ;(argv as any).modifiers = modifiers
 }
 

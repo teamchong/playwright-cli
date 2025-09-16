@@ -34,9 +34,9 @@ jobs:
     - name: TypeScript type checking
       run: pnpm run typecheck
     
-    - name: Run ESLint
+    - name: Run ESLint  
       run: |
-        pnpm run lint -- --format json --output-file eslint-report.json || echo '[]' > eslint-report.json
+        npx eslint src --ext .ts --format json --output-file eslint-report.json || echo '[]' > eslint-report.json
     
     - name: Run Prettier check
       run: pnpm run format:check
