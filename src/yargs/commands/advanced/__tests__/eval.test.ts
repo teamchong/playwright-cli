@@ -11,7 +11,7 @@ import { execSync } from 'child_process'
  * - NO TAB MANAGEMENT - let global setup handle browser lifecycle
  */
 describe('eval command - TAB ID FROM OUTPUT', () => {
-  const CLI = 'node dist/index.js'
+  const CLI = 'node dist/src/index.js'
   let testTabId: string
 
   function runCommand(

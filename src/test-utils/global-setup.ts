@@ -20,7 +20,7 @@ export default function setup() {
     // Launch browser session
     console.log('🌐 Starting browser session...')
     const { output, exitCode } = TabManager.runCommand(
-      'node dist/index.js open',
+      'node dist/src/index.js open',
       10000
     )
 

@@ -10,7 +10,7 @@ import { execSync } from 'child_process'
  * - Proper cleanup when tests complete
  */
 describe('back command - REAL TESTS', () => {
-  const CLI = 'node dist/index.js'
+  const CLI = 'node dist/src/index.js'
   let testTabId: string
 
   // Helper functions

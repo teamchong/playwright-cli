@@ -18,7 +18,7 @@ export interface TabInfo {
 }
 
 export class TabManager {
-  private static CLI = 'node dist/index.js'
+  private static CLI = 'node dist/src/index.js'
   private static createdTabs: Set<string> = new Set()
 
   /**

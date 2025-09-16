@@ -13,7 +13,7 @@ import * as path from 'path'
  * - NO TAB MANAGEMENT - let global setup handle browser lifecycle
  */
 describe('upload command - TAB ID FROM OUTPUT', () => {
-  const CLI = 'node dist/index.js'
+  const CLI = 'node dist/src/index.js'
   let testTabId: string
   let testFile1: string
   let testFile2: string

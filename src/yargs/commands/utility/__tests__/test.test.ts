@@ -10,7 +10,7 @@ import { execSync, spawn } from 'child_process'
  * as that would be recursive and time-consuming.
  */
 describe('test command - REAL TESTS', () => {
-  const CLI = 'node dist/index.js'
+  const CLI = 'node dist/src/index.js'
 
   // Helper to run command and check it doesn't hang
   function runCommand(
@@ -69,7 +69,7 @@ describe('test command - REAL TESTS', () => {
 
   beforeAll(async () => {
     // Build the CLI only if needed
-    if (!require('fs').existsSync('dist/index.js')) {
+    if (!require('fs').existsSync('dist/src/index.js')) {
       execSync('pnpm build', { stdio: 'ignore' })
     }
   }, 30000) // 30 second timeout for build

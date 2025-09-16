@@ -10,7 +10,7 @@ import * as path from 'path'
  * NO MOCKS - everything is tested against a real implementation.
  */
 describe('claude command - REAL TESTS', () => {
-  const CLI = 'node dist/index.js'
+  const CLI = 'node dist/src/index.js'
   const testClaudeFile = path.join(process.cwd(), 'CLAUDE.md')
   const originalClaudeContent = fs.existsSync(testClaudeFile)
     ? fs.readFileSync(testClaudeFile, 'utf-8')
@@ -43,7 +43,7 @@ describe('claude command - REAL TESTS', () => {
 
   beforeAll(async () => {
     // Build the CLI only if needed
-    if (!require('fs').existsSync('dist/index.js')) {
+    if (!require('fs').existsSync('dist/src/index.js')) {
       execSync('pnpm build', { stdio: 'ignore' })
     }
 

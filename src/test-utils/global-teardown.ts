@@ -17,7 +17,7 @@ export default function teardown() {
     // Close browser if it's still running
     console.log('🌐 Closing browser session...')
     try {
-      TabManager.runCommand('node dist/index.js close', 5000)
+      TabManager.runCommand('node dist/src/index.js close', 5000)
     } catch (error) {
       // Browser might already be closed, which is fine
       console.log('ℹ️  Browser was already closed')
