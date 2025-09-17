@@ -26,6 +26,12 @@ vi.mock('fs', () => ({
   unlinkSync: vi.fn(),
 }))
 vi.mock('../browser-helper')
+vi.mock('../platform-helper', () => ({
+  PlatformHelper: {
+    getClaudeDir: () => join(homedir(), '.claude'),
+    getOrCreateClaudeDir: vi.fn(() => join(homedir(), '.claude'))
+  }
+}))
 
 const CLAUDE_DIR = join(homedir(), '.claude')
 const SESSIONS_DIR = join(CLAUDE_DIR, 'playwright-sessions')
