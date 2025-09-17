@@ -108,12 +108,14 @@ describe('open command - REAL INTEGRATION TEST', () => {
     } catch (error: any) {
       errorOccurred = true
       errorMessage = error.stdout || error.stderr || ''
-      // Should show a user-friendly error message instead of throwing
-      expect(errorMessage).toContain('Connection failed')
-      expect(errorMessage).not.toContain('Error: Browser connection failed')
+      // Should show a user-friendly error message
+      expect(errorMessage).toContain('Connection failed - no server running')
+      expect(errorMessage).toContain('Connection failed - make sure a server is running')
+      // Should not show raw Playwright error
+      expect(errorMessage).not.toContain('net::ERR_CONNECTION_REFUSED')
     }
 
-    // Should handle gracefully, not throw unhandled errors
+    // Should handle gracefully with proper error
     expect(errorOccurred).toBe(true)
   })
 })
