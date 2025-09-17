@@ -238,15 +238,19 @@ export const openCommand = createCommand<OpenOptions>({
       if (spinner) {
         // Check if it's a connection refused error and provide user-friendly message
         if (error.message && error.message.includes('ERR_CONNECTION_REFUSED')) {
-          spinner.fail('Connection failed - no server running at the specified URL')
+          spinner.fail(
+            'Connection failed - no server running at the specified URL'
+          )
         } else {
           spinner.fail('Failed to open browser')
         }
       }
-      
+
       // Throw a custom error with user-friendly message for connection refused
       if (error.message && error.message.includes('ERR_CONNECTION_REFUSED')) {
-        throw new Error('Connection failed - make sure a server is running at the target URL')
+        throw new Error(
+          'Connection failed - make sure a server is running at the target URL'
+        )
       } else {
         throw new Error(`Browser connection failed: ${error.message}`)
       }

@@ -110,7 +110,9 @@ describe('open command - REAL INTEGRATION TEST', () => {
       errorMessage = error.stdout || error.stderr || ''
       // Should show a user-friendly error message
       expect(errorMessage).toContain('Connection failed - no server running')
-      expect(errorMessage).toContain('Connection failed - make sure a server is running')
+      expect(errorMessage).toContain(
+        'Connection failed - make sure a server is running'
+      )
       // Should not show raw Playwright error
       expect(errorMessage).not.toContain('net::ERR_CONNECTION_REFUSED')
     }
