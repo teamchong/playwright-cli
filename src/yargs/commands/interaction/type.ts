@@ -20,15 +20,15 @@ export const typeCommand = createCommand<TypeOptions>({
     aliases: [],
   },
 
-  command: 'type [selector] <text>',
+  command: 'type <selector> <text>',
   describe: 'Type text into an element',
 
   builder: yargs => {
     return yargs
       .positional('selector', {
-        describe: 'Element selector or text to find',
+        describe: 'Element selector or text to find (use --ref for ref-based selection)',
         type: 'string',
-        demandOption: false,
+        demandOption: true,
       })
       .positional('text', {
         describe: 'Text to type',
@@ -73,15 +73,27 @@ export const typeCommand = createCommand<TypeOptions>({
   },
 
   handler: async ({ argv, logger, spinner }) => {
-    const { text, port, delay, timeout, clear } = argv
+    const { port, delay, timeout, clear } = argv
     const tabIndex = argv['tab-index'] as number | undefined
     const tabId = argv['tab-id'] as string | undefined
     const ref = argv.ref as string | undefined
-    const selector = argv.selector as string | undefined
-
+    
+    // Get text and selector from argv - now both are required positionals
+    const text = argv.text as string
+    let selector = argv.selector as string | undefined
+    
+    // Special case: if using --ref, selector can be a dummy value
+    if (ref && selector === '-') {
+      selector = undefined
+    }
+    
     // Determine what to type into
     if (!selector && !ref) {
       throw new Error('Either selector or --ref must be provided')
+    }
+    
+    if (!text) {
+      throw new Error('Text to type is required')
     }
 
     const tabTarget =

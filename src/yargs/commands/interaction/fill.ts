@@ -116,30 +116,118 @@ export const fillCommand = createCommand<FillWithRefOptions>({
 
     await BrowserHelper.withTargetPage(port, tabIndex, tabId, async page => {
       for (const field of fields!) {
-        const [selector, ...valueParts] = field.split('=')
+        const [selectorPart, ...valueParts] = field.split('=')
         const value = valueParts.join('=') // Handle values with = in them
 
-        if (!selector || !value) {
+        if (!selectorPart || value === undefined) {
           errors.push(`Invalid field format: ${field}. Use selector=value`)
           continue
         }
 
         try {
-          // Try text-based selector resolution first
-          let actualSelector = selector
-          const textSelectorResult = await findBestSelector(page, selector)
-          if (textSelectorResult) {
-            actualSelector = textSelectorResult.selector
-            if (spinner) {
-              spinner.text = `Filling field via ${textSelectorResult.strategy}: ${selector}...`
+          let actualSelector = selectorPart
+          let strategy = 'direct'
+          let formScope = ''
+          
+          // Check if selector has form scoping (e.g., "#registration-form email")
+          const parts = selectorPart.trim().split(/\s+/)
+          if (parts.length === 2 && (parts[0].startsWith('#') || parts[0].startsWith('.'))) {
+            formScope = parts[0]
+            actualSelector = parts[1]
+          }
+          
+          // For simple identifiers (no CSS selector syntax), try field-specific resolution
+          if (!actualSelector.startsWith('#') && !actualSelector.startsWith('.') && !actualSelector.startsWith('[')) {
+            // Try to find form field by various attributes
+            const fieldSelectors = [
+              `[name="${actualSelector}"]`,        // by name attribute
+              `#${actualSelector}`,                 // by id
+              `[placeholder*="${actualSelector}" i]`, // by placeholder (case-insensitive)
+              `input[aria-label*="${actualSelector}" i]`, // by aria-label
+            ]
+            
+            // Add form scope if provided
+            if (formScope) {
+              for (let i = 0; i < fieldSelectors.length; i++) {
+                fieldSelectors[i] = `${formScope} ${fieldSelectors[i]}`
+              }
+            }
+            
+            let found = false
+            for (const fieldSelector of fieldSelectors) {
+              try {
+                const element = await page.$(fieldSelector)
+                if (element) {
+                  actualSelector = fieldSelector
+                  strategy = fieldSelector.includes('[name=') ? 'name' : 
+                            fieldSelector.includes('#') && !fieldSelector.includes(' #') ? 'id' :
+                            fieldSelector.includes('placeholder') ? 'placeholder' : 'aria-label'
+                  found = true
+                  break
+                }
+              } catch {
+                // Continue to next selector
+              }
+            }
+            
+            // If still not found, try finding by label text
+            if (!found) {
+              try {
+                // Try to find label with exact text match first
+                const labelSelector = formScope ? 
+                  `${formScope} label:text("${actualSelector}")` : 
+                  `label:text("${actualSelector}")`
+                const labelElement = await page.$(labelSelector)
+                if (labelElement) {
+                  const forAttr = await labelElement.getAttribute('for')
+                  if (forAttr) {
+                    actualSelector = formScope ? `${formScope} #${forAttr}` : `#${forAttr}`
+                    strategy = 'label'
+                    found = true
+                  }
+                }
+              } catch {
+                // Try contains text as fallback
+                try {
+                  const labelSelector = formScope ?
+                    `${formScope} label:has-text("${actualSelector}")` :
+                    `label:has-text("${actualSelector}")`
+                  const labelElement = await page.$(labelSelector)
+                  if (labelElement) {
+                    const forAttr = await labelElement.getAttribute('for')
+                    if (forAttr) {
+                      actualSelector = formScope ? `${formScope} #${forAttr}` : `#${forAttr}`
+                      strategy = 'label'
+                      found = true
+                    }
+                  }
+                } catch {
+                  // Fall back to text-based selector resolution
+                }
+              }
+            }
+            
+            // If no field-specific match found, try text-based selector resolution
+            if (!found) {
+              const textSelectorResult = await findBestSelector(page, actualSelector)
+              if (textSelectorResult) {
+                actualSelector = formScope ? 
+                  `${formScope} ${textSelectorResult.selector}` : 
+                  textSelectorResult.selector
+                strategy = textSelectorResult.strategy
+              }
             }
           }
           
+          if (spinner) {
+            spinner.text = `Filling field via ${strategy}: ${selectorPart}...`
+          }
+          
           await page.fill(actualSelector, value, { timeout: timeout as number })
-          logger.info(`  ✓ Filled ${selector} with "${value}"`)
+          logger.info(`  ✓ Filled ${selectorPart} with "${value}"`)
           filledCount++
         } catch (err: any) {
-          errors.push(`Failed to fill ${selector}: ${err.message}`)
+          errors.push(`Failed to fill ${selectorPart}: ${err.message}`)
         }
       }
     })
