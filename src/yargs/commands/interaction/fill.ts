@@ -49,6 +49,10 @@ export const fillCommand = createCommand<FillWithRefOptions>({
         }
         return true
       })
+      .option('form', {
+        describe: 'Scope all fields to a specific form (CSS selector)',
+        type: 'string',
+      })
       .option('port', {
         describe: 'Chrome debugging port',
         type: 'number',
@@ -69,6 +73,16 @@ export const fillCommand = createCommand<FillWithRefOptions>({
         describe: 'Target specific tab by unique ID',
         type: 'string',
       })
+      .option('quiet', {
+        describe: 'Suppress output',
+        type: 'boolean',
+        default: false,
+      })
+      .option('json', {
+        describe: 'Output results as JSON',
+        type: 'boolean',
+        default: false,
+      })
       .conflicts('tab-index', 'tab-id')
   },
 
@@ -76,6 +90,9 @@ export const fillCommand = createCommand<FillWithRefOptions>({
     const { fields, port, timeout, ref } = argv
     const tabIndex = argv['tab-index'] as number | undefined
     const tabId = argv['tab-id'] as string | undefined
+    const formScope = argv.form as string | undefined
+    const quiet = argv.quiet as boolean
+    const json = argv.json as boolean
     
     // Handle --ref mode (single field fill)
     if (ref) {
@@ -113,6 +130,7 @@ export const fillCommand = createCommand<FillWithRefOptions>({
 
     let filledCount = 0
     const errors: string[] = []
+    const results: Array<{ field: string; value: string; success: boolean; error?: string }> = []
 
     await BrowserHelper.withTargetPage(port, tabIndex, tabId, async page => {
       for (const field of fields!) {
@@ -127,12 +145,12 @@ export const fillCommand = createCommand<FillWithRefOptions>({
         try {
           let actualSelector = selectorPart
           let strategy = 'direct'
-          let formScope = ''
+          let localFormScope = formScope || ''
           
-          // Check if selector has form scoping (e.g., "#registration-form email")
+          // Check if selector has inline form scoping (e.g., "#registration-form email")
           const parts = selectorPart.trim().split(/\s+/)
           if (parts.length === 2 && (parts[0].startsWith('#') || parts[0].startsWith('.'))) {
-            formScope = parts[0]
+            localFormScope = parts[0]
             actualSelector = parts[1]
           }
           
@@ -147,9 +165,9 @@ export const fillCommand = createCommand<FillWithRefOptions>({
             ]
             
             // Add form scope if provided
-            if (formScope) {
+            if (localFormScope) {
               for (let i = 0; i < fieldSelectors.length; i++) {
-                fieldSelectors[i] = `${formScope} ${fieldSelectors[i]}`
+                fieldSelectors[i] = `${localFormScope} ${fieldSelectors[i]}`
               }
             }
             
@@ -174,14 +192,14 @@ export const fillCommand = createCommand<FillWithRefOptions>({
             if (!found) {
               try {
                 // Try to find label with exact text match first
-                const labelSelector = formScope ? 
-                  `${formScope} label:text("${actualSelector}")` : 
+                const labelSelector = localFormScope ? 
+                  `${localFormScope} label:text("${actualSelector}")` : 
                   `label:text("${actualSelector}")`
                 const labelElement = await page.$(labelSelector)
                 if (labelElement) {
                   const forAttr = await labelElement.getAttribute('for')
                   if (forAttr) {
-                    actualSelector = formScope ? `${formScope} #${forAttr}` : `#${forAttr}`
+                    actualSelector = localFormScope ? `${localFormScope} #${forAttr}` : `#${forAttr}`
                     strategy = 'label'
                     found = true
                   }
@@ -189,14 +207,14 @@ export const fillCommand = createCommand<FillWithRefOptions>({
               } catch {
                 // Try contains text as fallback
                 try {
-                  const labelSelector = formScope ?
-                    `${formScope} label:has-text("${actualSelector}")` :
+                  const labelSelector = localFormScope ?
+                    `${localFormScope} label:has-text("${actualSelector}")` :
                     `label:has-text("${actualSelector}")`
                   const labelElement = await page.$(labelSelector)
                   if (labelElement) {
                     const forAttr = await labelElement.getAttribute('for')
                     if (forAttr) {
-                      actualSelector = formScope ? `${formScope} #${forAttr}` : `#${forAttr}`
+                      actualSelector = localFormScope ? `${localFormScope} #${forAttr}` : `#${forAttr}`
                       strategy = 'label'
                       found = true
                     }
@@ -211,8 +229,8 @@ export const fillCommand = createCommand<FillWithRefOptions>({
             if (!found) {
               const textSelectorResult = await findBestSelector(page, actualSelector)
               if (textSelectorResult) {
-                actualSelector = formScope ? 
-                  `${formScope} ${textSelectorResult.selector}` : 
+                actualSelector = localFormScope ? 
+                  `${localFormScope} ${textSelectorResult.selector}` : 
                   textSelectorResult.selector
                 strategy = textSelectorResult.strategy
               }
@@ -224,18 +242,39 @@ export const fillCommand = createCommand<FillWithRefOptions>({
           }
           
           await page.fill(actualSelector, value, { timeout: timeout as number })
-          logger.info(`  ✓ Filled ${selectorPart} with "${value}"`)
+          if (!quiet && !json) {
+            logger.info(`  ✓ Filled ${selectorPart} with "${value}"`)
+          }
+          results.push({ field: selectorPart, value, success: true })
           filledCount++
         } catch (err: any) {
-          errors.push(`Failed to fill ${selectorPart}: ${err.message}`)
+          const errorMsg = err.message
+          errors.push(`Failed to fill ${selectorPart}: ${errorMsg}`)
+          results.push({ field: selectorPart, value, success: false, error: errorMsg })
         }
       }
     })
 
-    if (errors.length > 0) {
-      errors.forEach(error => logger.warn(`  ⚠️  ${error}`))
+    // Handle output based on flags
+    if (json) {
+      // JSON output
+      console.log(JSON.stringify({
+        success: errors.length === 0,
+        filled: filledCount,
+        total: fields!.length,
+        results
+      }, null, 2))
+    } else if (!quiet) {
+      // Normal output
+      if (errors.length > 0) {
+        errors.forEach(error => logger.warn(`  ⚠️  ${error}`))
+      }
+      
+      // Report summary
+      const summaryMsg = filledCount === fields!.length ? 
+        `✅ Filled all ${filledCount} field(s)${tabTarget}` :
+        `Filled ${filledCount} of ${fields!.length} field(s)${tabTarget}`
+      logger.success(summaryMsg)
     }
-
-    logger.success(`Filled ${filledCount} field(s)${tabTarget}`)
   },
 })

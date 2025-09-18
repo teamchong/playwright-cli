@@ -177,7 +177,8 @@ export const execCommand = createCommand<ExecuteOptions>({
           }
 
           if (argv.json) {
-            logger.info(
+            // Use console.log for clean JSON output
+            console.log(
               JSON.stringify(
                 {
                   result,

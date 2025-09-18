@@ -100,7 +100,7 @@ export const backCommand = createCommand<NavigationHistoryOptions>({
           spinner.succeed('Navigated back')
         }
 
-        logger.success('Successfully navigated back')
+        logger.success('Navigated back')
         logger.info(`Current page: ${url}`)
         logger.info(`Title: ${title}`)
 
