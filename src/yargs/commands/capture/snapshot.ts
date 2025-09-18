@@ -114,11 +114,13 @@ export const snapshotCommand: CommandModule<{}, SnapshotArgs> = {
             // Get detailed form information if --detailed flag is used
             let detailedFormInfo: any = null
             if (argv.detailed) {
-              detailedFormInfo = await page.evaluate(`
+              detailedFormInfo = await page.evaluate(() => {
+                // @ts-expect-error - document is available in browser context
                 const forms = Array.from(document.querySelectorAll('form'));
+                // @ts-expect-error - document is available in browser context  
                 const inputs = Array.from(document.querySelectorAll('input, textarea, select'));
                 
-                const formDetails = forms.map((form, index) => {
+                const formDetails = forms.map((form: any, index) => {
                   const formInputs = Array.from(form.querySelectorAll('input, textarea, select'));
                   return {
                     index,
@@ -126,7 +128,7 @@ export const snapshotCommand: CommandModule<{}, SnapshotArgs> = {
                     action: form.action || null,
                     method: form.method || 'get',
                     inputCount: formInputs.length,
-                    inputs: formInputs.map(input => ({
+                    inputs: formInputs.map((input: any) => ({
                       type: input.type || input.tagName.toLowerCase(),
                       name: input.name || null,
                       id: input.id || null,
@@ -138,7 +140,7 @@ export const snapshotCommand: CommandModule<{}, SnapshotArgs> = {
                   };
                 });
                 
-                const standaloneInputs = inputs.filter(input => !input.closest('form')).map(input => ({
+                const standaloneInputs = inputs.filter((input: any) => !input.closest('form')).map((input: any) => ({
                   type: input.type || input.tagName.toLowerCase(),
                   name: input.name || null,
                   id: input.id || null,
@@ -152,7 +154,7 @@ export const snapshotCommand: CommandModule<{}, SnapshotArgs> = {
                   forms: formDetails,
                   standaloneInputs
                 };
-              `)
+              })
             }
 
             if (argv.json) {

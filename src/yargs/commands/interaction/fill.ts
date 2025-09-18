@@ -90,9 +90,14 @@ export const fillCommand = createCommand<FillWithRefOptions>({
     const { fields, port, timeout, ref } = argv
     const tabIndex = argv['tab-index'] as number | undefined
     const tabId = argv['tab-id'] as string | undefined
-    const formScope = argv.form as string | undefined
+    let formScope = argv.form as string | undefined
     const quiet = argv.quiet as boolean
     const json = argv.json as boolean
+    
+    // Auto-prepend # to form scope if it's just an ID
+    if (formScope && !formScope.startsWith('#') && !formScope.startsWith('.') && !formScope.includes(' ')) {
+      formScope = `#${formScope}`
+    }
     
     // Handle --ref mode (single field fill)
     if (ref) {
@@ -137,8 +142,9 @@ export const fillCommand = createCommand<FillWithRefOptions>({
         const [selectorPart, ...valueParts] = field.split('=')
         const value = valueParts.join('=') // Handle values with = in them
 
-        if (!selectorPart || value === undefined) {
+        if (!selectorPart || value === undefined || value === '') {
           errors.push(`Invalid field format: ${field}. Use selector=value`)
+          results.push({ field, value: '', success: false, error: 'Invalid format' })
           continue
         }
 
@@ -257,10 +263,14 @@ export const fillCommand = createCommand<FillWithRefOptions>({
 
     // Handle output based on flags
     if (json) {
-      // JSON output
+      // JSON output - match test expectations
+      const filledFields = results.filter(r => r.success).map(r => r.field)
+      const failedFields = results.filter(r => !r.success).map(r => r.field)
+      
       console.log(JSON.stringify({
         success: errors.length === 0,
-        filled: filledCount,
+        filled: filledFields,
+        failed: failedFields,
         total: fields!.length,
         results
       }, null, 2))
@@ -270,10 +280,11 @@ export const fillCommand = createCommand<FillWithRefOptions>({
         errors.forEach(error => logger.warn(`  ⚠️  ${error}`))
       }
       
-      // Report summary
+      // Report summary - use proper pluralization
+      const fieldWord = filledCount === 1 ? 'field' : 'fields'
       const summaryMsg = filledCount === fields!.length ? 
-        `✅ Filled all ${filledCount} field(s)${tabTarget}` :
-        `Filled ${filledCount} of ${fields!.length} field(s)${tabTarget}`
+        `✅ Filled ${filledCount} ${fieldWord}${tabTarget}` :
+        `Filled ${filledCount} of ${fields!.length} ${fieldWord}${tabTarget}`
       logger.success(summaryMsg)
     }
   },
