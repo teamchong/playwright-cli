@@ -12,6 +12,31 @@ import { findBestSelector } from '../../../lib/selector-resolver'
 import type { FillOptions } from '../../types'
 import chalk from 'chalk'
 
+// Helper to calculate Levenshtein distance for suggestions
+function levenshteinDistance(a: string, b: string): number {
+  const matrix: number[][] = []
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i]
+  }
+  for (let j = 0; j <= a.length; j++) {
+    matrix[0][j] = j
+  }
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1]
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        )
+      }
+    }
+  }
+  return matrix[b.length][a.length]
+}
+
 interface FillWithRefOptions extends FillOptions {
   ref?: string
 }
@@ -137,7 +162,34 @@ export const fillCommand = createCommand<FillWithRefOptions>({
     const errors: string[] = []
     const results: Array<{ field: string; value: string; success: boolean; error?: string }> = []
 
+    // Get available field names for suggestions
+    let availableFields: string[] = []
+    
     await BrowserHelper.withTargetPage(port, tabIndex, tabId, async page => {
+      // Collect available fields for suggestions
+      try {
+        availableFields = await page.evaluate(() => {
+          // @ts-expect-error - document is available in browser context
+          const inputs = Array.from(document.querySelectorAll('input, textarea, select'))
+          const fieldNames: string[] = []
+          inputs.forEach((input: any) => {
+            if (input.name) fieldNames.push(input.name)
+            if (input.id) fieldNames.push(input.id)  
+            if (input.placeholder) fieldNames.push(input.placeholder)
+          })
+          // Also get labels
+          // @ts-expect-error - document is available in browser context
+          const labels = Array.from(document.querySelectorAll('label'))
+          labels.forEach((label: any) => {
+            const text = label.textContent?.trim()
+            if (text) fieldNames.push(text)
+          })
+          return [...new Set(fieldNames)] // Remove duplicates
+        })
+      } catch {
+        // Ignore errors in getting field names
+      }
+      
       for (const field of fields!) {
         const [selectorPart, ...valueParts] = field.split('=')
         const value = valueParts.join('=') // Handle values with = in them
@@ -247,6 +299,12 @@ export const fillCommand = createCommand<FillWithRefOptions>({
             spinner.text = `Filling field via ${strategy}: ${selectorPart}...`
           }
           
+          // Check if element exists before trying to fill
+          const element = await page.$(actualSelector)
+          if (!element) {
+            throw new Error(`Element not found: ${actualSelector}`)
+          }
+          
           await page.fill(actualSelector, value, { timeout: timeout as number })
           if (!quiet && !json) {
             logger.info(`  ✓ Filled ${selectorPart} with "${value}"`)
@@ -254,7 +312,22 @@ export const fillCommand = createCommand<FillWithRefOptions>({
           results.push({ field: selectorPart, value, success: true })
           filledCount++
         } catch (err: any) {
-          const errorMsg = err.message
+          let errorMsg = err.message
+          
+          // Add suggestions for field not found errors
+          if (errorMsg.includes('Timeout') || errorMsg.includes('not found')) {
+            const suggestions = availableFields
+              .map(field => ({ field, distance: levenshteinDistance(selectorPart.toLowerCase(), field.toLowerCase()) }))
+              .filter(s => s.distance <= 3) // Only suggest if reasonably close
+              .sort((a, b) => a.distance - b.distance)
+              .slice(0, 3)
+              .map(s => s.field)
+            
+            if (suggestions.length > 0) {
+              errorMsg += `. Did you mean: ${suggestions.join(', ')}?`
+            }
+          }
+          
           errors.push(`Failed to fill ${selectorPart}: ${errorMsg}`)
           results.push({ field: selectorPart, value, success: false, error: errorMsg })
         }
