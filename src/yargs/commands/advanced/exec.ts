@@ -9,6 +9,7 @@ import * as fs from 'fs'
 import chalk from 'chalk'
 import { createCommand } from '../../lib/command-builder'
 import { BrowserHelper } from '../../../lib/browser-helper'
+import { executeWithSimplifiedContext } from '../../../lib/script-context'
 import type { ExecuteOptions } from '../../types'
 
 export const execCommand = createCommand<ExecuteOptions>({
@@ -20,13 +21,22 @@ export const execCommand = createCommand<ExecuteOptions>({
   },
 
   command: 'exec [file]',
-  describe: 'Execute JavaScript/TypeScript file in Playwright session',
+  describe: 'Execute JavaScript/TypeScript file or inline code in Playwright session',
 
   builder: yargs => {
     return yargs
       .positional('file', {
         describe: 'JavaScript/TypeScript file to execute (or read from stdin)',
         type: 'string',
+      })
+      .option('inline', {
+        describe: 'Execute inline JavaScript code directly',
+        type: 'string',
+      })
+      .option('simple', {
+        describe: 'Use simplified API with helper functions (goto, click, type, etc.)',
+        type: 'boolean',
+        default: false,
       })
       .option('port', {
         describe: 'Chrome debugging port',
@@ -54,10 +64,23 @@ export const execCommand = createCommand<ExecuteOptions>({
         type: 'string',
       })
       .conflicts('tab-index', 'tab-id')
+      .conflicts('file', 'inline')
       .example('$0 exec script.js', 'Execute a JavaScript file')
       .example(
         'echo "console.log(location.href)" | $0 exec',
         'Execute from stdin'
+      )
+      .example(
+        '$0 exec --inline "console.log(await page.title())"',
+        'Execute inline JavaScript'
+      )
+      .example(
+        '$0 exec --inline "await page.click(\'button\')"',
+        'Execute inline page interaction'
+      )
+      .example(
+        '$0 exec --inline "await click(\'button\')" --simple',
+        'Execute with simplified API'
       )
   },
 
@@ -65,9 +88,13 @@ export const execCommand = createCommand<ExecuteOptions>({
     try {
       const { argv, logger } = cmdContext
 
-      // Get code from file or stdin
+      // Get code from file, inline, or stdin
       let code: string
-      if (argv.file) {
+      if (argv.inline) {
+        // Use inline code
+        code = argv.inline as string
+        logger.info(`⚡ Executing inline JavaScript...`)
+      } else if (argv.file) {
         // Read from file
         code = await fs.promises.readFile(argv.file, 'utf-8')
         logger.info(`📄 Executing ${argv.file}...`)
@@ -128,13 +155,26 @@ export const execCommand = createCommand<ExecuteOptions>({
           const browserContext = page.context()
           const browser = browserContext.browser()
 
-          // Execute the code with page context
-          const result = await executeCode(
-            page,
-            browserContext,
-            browser,
-            consoleWrapper
-          )
+          // Execute the code with appropriate context
+          let result
+          if (argv.simple) {
+            // Use simplified context with helper functions
+            result = await executeWithSimplifiedContext(
+              code,
+              page,
+              browserContext,
+              browser,
+              consoleWrapper
+            )
+          } else {
+            // Use standard Playwright API context
+            result = await executeCode(
+              page,
+              browserContext,
+              browser,
+              consoleWrapper
+            )
+          }
 
           if (argv.json) {
             logger.info(

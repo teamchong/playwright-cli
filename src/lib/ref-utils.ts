@@ -139,7 +139,8 @@ export function nodeToSelector(node: any): string {
   }
   if (node.role === 'textbox') {
     if (node.name) {
-      return `input[aria-label="${node.name}"]`
+      // Try placeholder first, then aria-label
+      return `input[placeholder="${node.name}"], input[aria-label="${node.name}"]`
     }
     if (node.value) {
       return `input[value="${node.value}"]`

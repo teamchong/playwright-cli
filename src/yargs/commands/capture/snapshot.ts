@@ -4,12 +4,14 @@ import chalk from 'chalk'
 import { BrowserHelper } from '../../../lib/browser-helper'
 import { logger } from '../../../lib/logger'
 import { extractInteractiveElements } from '../../../lib/ref-utils'
+import { refManager } from '../../../lib/ref-manager'
 
 interface SnapshotArgs extends Arguments {
   'port': number
   'timeout': number
   'json'?: boolean
   'full'?: boolean
+  'detailed'?: boolean
   'tab-index'?: number
   'tab-id'?: string
 }
@@ -50,6 +52,10 @@ export const snapshotCommand: CommandModule<{}, SnapshotArgs> = {
       })
       .option('full', {
         describe: 'Show full accessibility tree (not just interactive)',
+        type: 'boolean',
+      })
+      .option('detailed', {
+        describe: 'Show detailed form field information',
         type: 'boolean',
       })
       .option('tab-index', {
@@ -101,9 +107,59 @@ export const snapshotCommand: CommandModule<{}, SnapshotArgs> = {
           } else {
             // Show only interactive elements with refs (new default)
             const interactiveElements = extractInteractiveElements(snapshot)
+            
+            // Store refs in RefManager for later use
+            refManager.storeSnapshot(interactiveElements, tabId)
+
+            // Get detailed form information if --detailed flag is used
+            let detailedFormInfo: any = null
+            if (argv.detailed) {
+              detailedFormInfo = await page.evaluate(`
+                const forms = Array.from(document.querySelectorAll('form'));
+                const inputs = Array.from(document.querySelectorAll('input, textarea, select'));
+                
+                const formDetails = forms.map((form, index) => {
+                  const formInputs = Array.from(form.querySelectorAll('input, textarea, select'));
+                  return {
+                    index,
+                    id: form.id || null,
+                    action: form.action || null,
+                    method: form.method || 'get',
+                    inputCount: formInputs.length,
+                    inputs: formInputs.map(input => ({
+                      type: input.type || input.tagName.toLowerCase(),
+                      name: input.name || null,
+                      id: input.id || null,
+                      placeholder: input.placeholder || null,
+                      value: input.value || null,
+                      required: input.required || false,
+                      disabled: input.disabled || false
+                    }))
+                  };
+                });
+                
+                const standaloneInputs = inputs.filter(input => !input.closest('form')).map(input => ({
+                  type: input.type || input.tagName.toLowerCase(),
+                  name: input.name || null,
+                  id: input.id || null,
+                  placeholder: input.placeholder || null,
+                  value: input.value || null,
+                  required: input.required || false,
+                  disabled: input.disabled || false
+                }));
+                
+                return {
+                  forms: formDetails,
+                  standaloneInputs
+                };
+              `)
+            }
 
             if (argv.json) {
-              logger.info(JSON.stringify(interactiveElements, null, 2))
+              const output = argv.detailed 
+                ? { interactiveElements, detailedFormInfo }
+                : interactiveElements
+              logger.info(JSON.stringify(output, null, 2))
             } else {
               logger.info('Interactive Elements:')
               logger.info(chalk.gray('─'.repeat(40)))
@@ -122,10 +178,77 @@ export const snapshotCommand: CommandModule<{}, SnapshotArgs> = {
                           : chalk.white
 
                   const name = elem.name || '(no text)'
-                  logger.info(
-                    `${roleColor(elem.role)} "${name}" ${chalk.gray(`[ref=${elem.ref}]`)}`
-                  )
+                  
+                  if (argv.detailed && elem.role === 'textbox') {
+                    // Find matching detailed info for this input
+                    const matchingInput = detailedFormInfo?.standaloneInputs?.find((input: any) => 
+                      input.placeholder === elem.name || input.name === elem.name || input.id === elem.name
+                    ) || detailedFormInfo?.forms?.flatMap((form: any) => form.inputs)?.find((input: any) =>
+                      input.placeholder === elem.name || input.name === elem.name || input.id === elem.name
+                    )
+                    
+                    let details = ''
+                    if (matchingInput) {
+                      const parts = []
+                      if (matchingInput.type && matchingInput.type !== 'text') parts.push(`type=${matchingInput.type}`)
+                      if (matchingInput.name) parts.push(`name=${matchingInput.name}`)
+                      if (matchingInput.required) parts.push('required')
+                      if (matchingInput.value) parts.push(`value="${matchingInput.value}"`)
+                      if (parts.length > 0) details = chalk.gray(` (${parts.join(', ')})`)
+                    }
+                    
+                    logger.info(
+                      `${roleColor(elem.role)} "${name}" ${chalk.gray(`[ref=${elem.ref}]`)}${details}`
+                    )
+                  } else {
+                    logger.info(
+                      `${roleColor(elem.role)} "${name}" ${chalk.gray(`[ref=${elem.ref}]`)}`
+                    )
+                  }
                 })
+              }
+
+              // Show detailed form information if requested
+              if (argv.detailed && detailedFormInfo) {
+                logger.info('')
+                logger.info(chalk.blue('📋 Detailed Form Information:'))
+                logger.info(chalk.gray('─'.repeat(40)))
+                
+                if (detailedFormInfo.forms && detailedFormInfo.forms.length > 0) {
+                  detailedFormInfo.forms.forEach((form: any, index: number) => {
+                    logger.info(chalk.cyan(`Form ${index + 1}:`))
+                    if (form.id) logger.info(`  ID: ${form.id}`)
+                    if (form.action) logger.info(`  Action: ${form.action}`)
+                    logger.info(`  Method: ${form.method}`)
+                    logger.info(`  ${form.inputCount} input field(s):`)
+                    
+                    form.inputs.forEach((input: any, inputIndex: number) => {
+                      const statusIcon = input.value ? '✓' : '○'
+                      const requiredFlag = input.required ? chalk.red(' *') : ''
+                      const disabledFlag = input.disabled ? chalk.gray(' (disabled)') : ''
+                      
+                      logger.info(`    ${statusIcon} ${input.type} "${input.placeholder || input.name || input.id || 'unnamed'}"${requiredFlag}${disabledFlag}`)
+                      if (input.value) {
+                        logger.info(`      Current value: "${input.value}"`)
+                      }
+                    })
+                    logger.info('')
+                  })
+                }
+                
+                if (detailedFormInfo.standaloneInputs && detailedFormInfo.standaloneInputs.length > 0) {
+                  logger.info(chalk.cyan('Standalone Inputs (not in forms):'))
+                  detailedFormInfo.standaloneInputs.forEach((input: any) => {
+                    const statusIcon = input.value ? '✓' : '○'
+                    const requiredFlag = input.required ? chalk.red(' *') : ''
+                    const disabledFlag = input.disabled ? chalk.gray(' (disabled)') : ''
+                    
+                    logger.info(`  ${statusIcon} ${input.type} "${input.placeholder || input.name || input.id || 'unnamed'}"${requiredFlag}${disabledFlag}`)
+                    if (input.value) {
+                      logger.info(`    Current value: "${input.value}"`)
+                    }
+                  })
+                }
               }
 
               logger.info(chalk.gray('─'.repeat(40)))
@@ -134,6 +257,13 @@ export const snapshotCommand: CommandModule<{}, SnapshotArgs> = {
                   `Found ${interactiveElements.length} interactive elements`
                 )
               )
+              
+              if (argv.detailed) {
+                const totalForms = detailedFormInfo?.forms?.length || 0
+                const totalInputs = (detailedFormInfo?.forms?.reduce((sum: number, form: any) => sum + form.inputCount, 0) || 0) + 
+                                   (detailedFormInfo?.standaloneInputs?.length || 0)
+                logger.info(chalk.gray(`${totalForms} form(s), ${totalInputs} input field(s)`))
+              }
             }
           }
         }

@@ -208,9 +208,9 @@ describe('ref support for interaction commands', () => {
         `${CLI} snapshot --tab-id ${testTabId}`
       )
       
-      // Extract refs from both
-      const ref1 = extractRef(snapshot1, 'Click Me')
-      const ref2 = extractRef(snapshot2, 'Click Me')
+      // Extract refs from both (button text is "Clicked" after click test)
+      const ref1 = extractRef(snapshot1, 'Clicked')
+      const ref2 = extractRef(snapshot2, 'Clicked')
       
       // Refs should be consistent for same elements
       expect(ref1).toBe(ref2)
