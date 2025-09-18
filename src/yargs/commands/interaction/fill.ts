@@ -354,11 +354,18 @@ export const fillCommand = createCommand<FillWithRefOptions>({
       }
       
       // Report summary - use proper pluralization
-      const fieldWord = filledCount === 1 ? 'field' : 'fields'
+      const fieldWord = fields!.length === 1 ? 'field' : 'fields'
       const summaryMsg = filledCount === fields!.length ? 
         `✅ Filled ${filledCount} ${fieldWord}${tabTarget}` :
-        `Filled ${filledCount} of ${fields!.length} ${fieldWord}${tabTarget}`
-      logger.success(summaryMsg)
+        filledCount === 0 ?
+        `❌ Failed to fill any ${fieldWord}${tabTarget}` :
+        `⚠️  Filled ${filledCount} of ${fields!.length} ${fieldWord}${tabTarget}`
+      
+      if (filledCount === fields!.length) {
+        logger.success(summaryMsg)
+      } else {
+        logger.warn(summaryMsg)
+      }
     }
   },
 })
