@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/teamchong/playwright-cli/compare/v1.0.0...v1.0.1) (2025-09-18)
+
+
+### Bug Fixes
+
+* update CLI documentation and add auto-generation system ([0d8fbe5](https://github.com/teamchong/playwright-cli/commit/0d8fbe5341266dbee63f775e380b12a6906f08d2))
+
 # 1.0.0 (2025-09-17)
 
 
