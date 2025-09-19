@@ -96,10 +96,21 @@ function isCssSelector(input: string): boolean {
   }
   
   // Common CSS selector patterns
+  // List of valid HTML tags to check against
+  const validTags = ['a', 'button', 'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'input', 'textarea', 'select', 'form', 'label', 'img', 'video', 'audio',
+    'ul', 'ol', 'li', 'table', 'tr', 'td', 'th', 'thead', 'tbody', 'tfoot',
+    'header', 'footer', 'nav', 'main', 'section', 'article', 'aside',
+    'iframe', 'canvas', 'svg', 'path', 'g', 'rect', 'circle', 'text']
+  
+  // Check if it's a valid HTML tag name
+  if (/^[a-zA-Z][\w-]*$/.test(input) && validTags.includes(input.toLowerCase())) {
+    return true
+  }
+  
   const cssPatterns = [
     /^#[\w-]+$/,          // ID: #myid (must be complete)
     /^\.[\w-]+$/,         // Class: .myclass (must be complete)
-    /^[a-zA-Z][\w-]*$/,   // Tag: div (must be valid tag name)
     /^\[.+\]$/,           // Attribute: [data-test]
     /^[\w-]+\[.+\]$/,     // Tag with attribute: input[type="text"]
     /[\>\+\~]/,           // Combinators: > + ~ 
@@ -178,52 +189,68 @@ export async function findBestSelector(
     }
   }
   
+  // Debug logging
+  const debug = process.env.DEBUG || false
+  if (debug) {
+    console.log(`[findBestSelector] Looking for text: "${textInput}"`)
+  }
+  
   // Try different approaches to find elements by text
   const strategies = [
     // Try form field by name attribute (high priority for form filling)
     { 
-      selector: `input[name="${escapeText(textInput)}"], textarea[name="${escapeText(textInput)}"], select[name="${escapeText(textInput)}"]`,
+      selector: `input[name="${textInput}"], textarea[name="${textInput}"], select[name="${textInput}"]`,
       strategy: 'form-name'
     },
     // Try form field by id attribute
     { 
-      selector: `input[id="${escapeText(textInput)}"], textarea[id="${escapeText(textInput)}"], select[id="${escapeText(textInput)}"]`,
+      selector: `input[id="${textInput}"], textarea[id="${textInput}"], select[id="${textInput}"]`,
       strategy: 'form-id'
     },
-    // Try exact button text using text selector
+    // Try exact button text - using getByRole with exact match
     { 
-      selector: `button >> text="${escapeText(textInput)}"`,
+      selector: `button:text-is("${textInput}")`,
       strategy: 'button-exact'
     },
-    // Try exact link text using text selector
+    // Try exact link text
     { 
-      selector: `a >> text="${escapeText(textInput)}"`,
+      selector: `a:text-is("${textInput}")`,
       strategy: 'link-exact'
     },
-    // Try exact text match (highest priority for any element)
+    // Try exact text match on any element
     { 
-      selector: `text="${escapeText(textInput)}"`,
+      selector: `:text-is("${textInput}")`,
       strategy: 'text-exact'
     },
     // Try button with partial text
     { 
-      selector: `button:has-text("${escapeText(textInput)}")`,
+      selector: `button:has-text("${textInput}")`,
       strategy: 'button-partial'
     },
     // Try link with partial text
     { 
-      selector: `a:has-text("${escapeText(textInput)}")`,
+      selector: `a:has-text("${textInput}")`,
       strategy: 'link-partial'
     },
-    // Try input placeholder
+    // Try partial text on any element
     { 
-      selector: `input[placeholder*="${escapeText(textInput)}" i]`,
+      selector: `:has-text("${textInput}")`,
+      strategy: 'text-partial'
+    },
+    // Try input placeholder - case insensitive partial match
+    { 
+      selector: `input[placeholder*="${textInput}" i]`,
       strategy: 'placeholder'
     },
-    // Try aria-label
+    // Try aria-label - case insensitive partial match
     { 
-      selector: `[aria-label*="${escapeText(textInput)}" i]`,
+      selector: `[aria-label*="${textInput}" i]`,
       strategy: 'aria-label'
+    },
+    // Try elements with role=button
+    { 
+      selector: `[role="button"]:has-text("${textInput}")`,
+      strategy: 'role-button'
     }
   ]
   
@@ -231,39 +258,40 @@ export async function findBestSelector(
   for (const { selector, strategy } of strategies) {
     try {
       const count = await page.locator(selector).count()
+      if (debug) {
+        console.log(`[findBestSelector] Testing ${strategy}: "${selector}" - found ${count} elements`)
+      }
       if (count === 1) {
         // Perfect match - exactly one element
+        if (debug) {
+          console.log(`[findBestSelector] ✓ Found single match with ${strategy}`)
+        }
         return { selector, strategy }
       } else if (count > 1) {
-        // Multiple matches - return first visible one
-        const firstVisible = `${selector} >> visible=true`
-        const visibleCount = await page.locator(firstVisible).count()
-        if (visibleCount >= 1) {
-          return { 
-            selector: `${selector} >> first`,
-            strategy: strategy + '+first'
-          }
+        // Multiple matches - return first one
+        // Use .first() which is the proper Playwright way
+        if (debug) {
+          console.log(`[findBestSelector] ✓ Found ${count} matches with ${strategy}, using first`)
+        }
+        return { 
+          selector: selector,
+          strategy: strategy + '+first'
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       // Strategy failed, try next one
+      // Debug logging to understand why selectors fail
+      if (debug) {
+        console.error(`[findBestSelector] ✗ ${strategy} failed: ${error?.message || error}`)
+      }
       continue
     }
   }
   
+  if (debug) {
+    console.log(`[findBestSelector] ✗ No selector found for "${textInput}"`)
+  }
   return null
 }
 
-/**
- * Extract strategy description from selector
- */
-function getStrategyFromSelector(selector: string): string {
-  if (selector.includes('text=')) return 'exact-text'
-  if (selector.includes('text*=')) return 'partial-text'
-  if (selector.includes('aria-label')) return 'aria-label'
-  if (selector.includes('placeholder')) return 'placeholder'
-  if (selector.includes('title')) return 'title'
-  if (selector.includes('button')) return 'button-text'
-  if (selector.includes('a >>')) return 'link-text'
-  return 'generic'
-}
+// Removed unused function getStrategyFromSelector

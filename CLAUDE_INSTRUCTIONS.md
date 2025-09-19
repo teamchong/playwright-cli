@@ -30,7 +30,7 @@ playwright back                              # Navigate back in browser history
 playwright wait [selector]                   # Wait for element or timeout
 playwright click [selector]                  # Click on an element
 playwright hover [selector]                  # Hover over an element
-playwright type <selector> <text>            # Type text into an element
+playwright type [selector] [text]            # Type text into an element
 playwright fill [fields...]                  # Fill form fields with values
 playwright select <selector> <values...>     # Select option(s) in a dropdown
 playwright drag <selector> <target>          # Drag from source to target element

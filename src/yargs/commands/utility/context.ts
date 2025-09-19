@@ -15,6 +15,7 @@ import chalk from 'chalk'
 import { BrowserHelper } from '../../../lib/browser-helper'
 import { logger } from '../../../lib/logger'
 import { extractInteractiveElements } from '../../../lib/ref-utils'
+import { actionHistory } from '../../../lib/action-history'
 
 interface ContextArgs extends Arguments {
   'port': number
@@ -162,6 +163,10 @@ export const contextCommand: CommandModule<{}, ContextArgs> = {
             })`).catch(() => null)
           }
 
+          // Get recent actions
+          const recentActions = actionHistory.getRecentActions(5, tabId)
+          const lastAction = actionHistory.getLastAction(tabId)
+          
           return {
             page: {
               url,
@@ -180,6 +185,10 @@ export const contextCommand: CommandModule<{}, ContextArgs> = {
             },
             forms: formInfo,
             viewport: viewportInfo,
+            actions: {
+              recent: recentActions.map(a => actionHistory.formatAction(a)),
+              last: lastAction ? actionHistory.formatAction(lastAction) : null
+            },
             tabInfo: {
               tabIndex,
               tabId: tabId?.slice(0, 8) + '...' || 'current'
@@ -238,6 +247,21 @@ export const contextCommand: CommandModule<{}, ContextArgs> = {
         logger.info(chalk.blue('🧭 Navigation'))
         logger.info(`  Can go back: ${context.navigation.canGoBack ? chalk.green('Yes') : chalk.gray('No')}`)
         logger.info(`  History length: ${context.navigation.historyLength}`)
+        
+        // Recent actions
+        const actions = context.actions as any
+        if (actions && (actions.recent?.length > 0 || actions.last)) {
+          logger.info('')
+          logger.info(chalk.blue('📜 Recent Actions'))
+          if (actions.last) {
+            logger.info(`  Last action: ${actions.last}`)
+          }
+          if (actions.recent && actions.recent.length > 0) {
+            actions.recent.forEach((action: string) => {
+              logger.info(`  - ${action}`)
+            })
+          }
+        }
         
         // Tab info
         if (tabIndex !== undefined || tabId) {

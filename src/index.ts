@@ -33,6 +33,9 @@ cli
     process.exit(0)
   })
   .catch(err => {
-    // Error already handled by yargs, just exit with error code
+    // Ensure error message is output for test capture
+    if (err?.message) {
+      console.error(err.message)
+    }
     process.exit(1)
   })

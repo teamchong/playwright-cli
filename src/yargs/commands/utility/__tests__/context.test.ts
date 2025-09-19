@@ -120,8 +120,18 @@ describe('context command for state visibility', () => {
 
   describe('action history tracking', () => {
     beforeEach(async () => {
-      // Reset action history for clean test
-      // This might need implementation-specific reset
+      // Reset action history for clean test by clearing the temp file
+      const fs = require('fs')
+      const path = require('path')
+      const os = require('os')
+      const historyFile = path.join(os.tmpdir(), 'playwright-cli-actions.json')
+      try {
+        if (fs.existsSync(historyFile)) {
+          fs.unlinkSync(historyFile)
+        }
+      } catch (error) {
+        // Ignore cleanup errors
+      }
     })
 
     it('should show recent navigation', async () => {
@@ -136,7 +146,7 @@ describe('context command for state visibility', () => {
       
       expect(output).toContain('Last')
       expect(output).toContain('action')
-      expect(output).toContain('navigate')
+      expect(output).toContain('Navigated')
       expect(output).toContain('example.com')
     })
 
@@ -150,7 +160,7 @@ describe('context command for state visibility', () => {
         `${CLI} context --tab-id ${testTabId}`
       )
       
-      expect(output).toMatch(/click.*action-btn|Recent.*click/)
+      expect(output).toMatch(/Clicked.*action-btn|Recent.*Clicked/)
     })
 
     it('should show recent form fills', async () => {
@@ -166,7 +176,7 @@ describe('context command for state visibility', () => {
         `${CLI} context --tab-id ${testTabId}`
       )
       
-      expect(output).toMatch(/fill.*email|Recent.*fill/)
+      expect(output).toMatch(/Filled.*email|Recent.*Filled/)
       expect(output).toContain('test@example.com')
     })
 
@@ -183,7 +193,7 @@ describe('context command for state visibility', () => {
       )
       
       // Should show limited number of recent actions (e.g., last 3-5)
-      const actionCount = (output.match(/click/g) || []).length
+      const actionCount = (output.match(/Clicked/g) || []).length
       expect(actionCount).toBeLessThanOrEqual(5)
     })
   })

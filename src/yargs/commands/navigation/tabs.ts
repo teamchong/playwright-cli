@@ -38,6 +38,10 @@ export const tabsCommand = createCommand<TabOptions>({
         type: 'number',
         alias: 'i',
       })
+      .option('tab-id', {
+        describe: 'Tab ID for close/select actions',
+        type: 'string',
+      })
       .option('url', {
         describe: 'URL for new tab',
         type: 'string',
@@ -54,12 +58,14 @@ export const tabsCommand = createCommand<TabOptions>({
 
   validateArgs: argv => {
     const { action, index, url } = argv
+    const tabId = argv['tab-id'] as string | undefined
 
     if (
       (action === 'close' || action === 'select') &&
-      typeof index !== 'number'
+      typeof index !== 'number' &&
+      !tabId
     ) {
-      return `${action} action requires --index parameter`
+      return `${action} action requires either --index or --tab-id parameter`
     }
 
     if (action === 'new' && url) {
@@ -73,6 +79,7 @@ export const tabsCommand = createCommand<TabOptions>({
 
   handler: async ({ argv, logger, spinner }) => {
     const { action, index, url } = argv
+    const tabId = argv['tab-id'] as string | undefined
 
     if (spinner) {
       spinner.start(`Managing tabs: ${action}...`)
@@ -175,26 +182,53 @@ export const tabsCommand = createCommand<TabOptions>({
 
       case 'close': {
         const pages = await BrowserHelper.getPages(argv.port)
+        let targetPage: any
+        let targetIndex: number = -1
 
-        if (typeof index !== 'number' || index < 0 || index >= pages.length) {
-          throw new Error(
-            `Invalid tab index: ${index}. Available: 0-${pages.length - 1}`
-          )
+        if (tabId) {
+          // Find page by tab ID
+          for (let i = 0; i < pages.length; i++) {
+            const page = pages[i]
+            try {
+              const pageId = await BrowserHelper.getPageId(page)
+              if (pageId === tabId) {
+                targetPage = page
+                targetIndex = i
+                break
+              }
+            } catch {
+              // Continue searching
+            }
+          }
+          
+          if (!targetPage) {
+            throw new Error(`Tab with ID ${tabId} not found`)
+          }
+        } else {
+          // Use index
+          if (typeof index !== 'number' || index < 0 || index >= pages.length) {
+            throw new Error(
+              `Invalid tab index: ${index}. Available: 0-${pages.length - 1}`
+            )
+          }
+          targetPage = pages[index]
+          targetIndex = index
         }
 
-        await pages[index].close()
+        await targetPage.close()
 
         if (spinner) {
-          spinner.succeed(`Closed tab ${index}`)
+          spinner.succeed(`Closed tab ${tabId ? `with ID ${tabId.slice(0, 8)}...` : targetIndex}`)
         }
 
-        logger.success(`Closed tab ${index}`)
+        console.log(`Closed tab ${tabId ? `with ID ${tabId.slice(0, 8)}...` : targetIndex}`)
 
         if (argv.json) {
           logger.json({
             success: true,
             action: 'close',
-            index,
+            index: targetIndex,
+            tabId: tabId,
           })
         }
         break
@@ -202,26 +236,53 @@ export const tabsCommand = createCommand<TabOptions>({
 
       case 'select': {
         const pages = await BrowserHelper.getPages(argv.port)
+        let targetPage: any
+        let targetIndex: number = -1
 
-        if (typeof index !== 'number' || index < 0 || index >= pages.length) {
-          throw new Error(
-            `Invalid tab index: ${index}. Available: 0-${pages.length - 1}`
-          )
+        if (tabId) {
+          // Find page by tab ID
+          for (let i = 0; i < pages.length; i++) {
+            const page = pages[i]
+            try {
+              const pageId = await BrowserHelper.getPageId(page)
+              if (pageId === tabId) {
+                targetPage = page
+                targetIndex = i
+                break
+              }
+            } catch {
+              // Continue searching
+            }
+          }
+          
+          if (!targetPage) {
+            throw new Error(`Tab with ID ${tabId} not found`)
+          }
+        } else {
+          // Use index
+          if (typeof index !== 'number' || index < 0 || index >= pages.length) {
+            throw new Error(
+              `Invalid tab index: ${index}. Available: 0-${pages.length - 1}`
+            )
+          }
+          targetPage = pages[index]
+          targetIndex = index
         }
 
-        await pages[index].bringToFront()
+        await targetPage.bringToFront()
 
         if (spinner) {
-          spinner.succeed(`Selected tab ${index}`)
+          spinner.succeed(`Selected tab ${tabId ? `with ID ${tabId.slice(0, 8)}...` : targetIndex}`)
         }
 
-        logger.success(`Selected tab ${index}`)
+        logger.success(`Selected tab ${tabId ? `with ID ${tabId.slice(0, 8)}...` : targetIndex}`)
 
         if (argv.json) {
           logger.json({
             success: true,
             action: 'select',
-            index,
+            index: targetIndex,
+            tabId: tabId,
           })
         }
         break

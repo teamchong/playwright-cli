@@ -58,6 +58,7 @@ import { testCommand } from './commands/utility/test'
 import { sessionCommand } from './commands/utility/session'
 import { installCommand } from './commands/utility/install'
 import { claudeCommand } from './commands/utility/claude'
+import { contextCommand } from './commands/utility/context'
 
 /**
  * Global CLI options interface
@@ -156,6 +157,7 @@ export function createCli(argv?: string[]) {
     .command(sessionCommand)
     .command(installCommand)
     .command(claudeCommand)
+    .command(contextCommand)
 
     // CLI configuration
     // Only demand command in production
@@ -184,10 +186,11 @@ export function createCli(argv?: string[]) {
           console.error(err.stack)
         }
       } else {
-        // Handle parsing errors
-        console.error(chalk.red('Error:'), msg)
-        console.error()
-        yargs.showHelp()
+        // Handle parsing errors - use console.log to ensure stdout capture
+        console.log(chalk.red('Error:'), msg)
+        console.log()
+        // Show help to stdout as well for test capture
+        console.log(yargs.getHelp())
       }
       process.exit(1)
     })

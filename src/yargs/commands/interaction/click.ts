@@ -10,6 +10,7 @@ import { BrowserHelper } from '../../../lib/browser-helper'
 import { findElementByRef, nodeToSelector } from '../../../lib/ref-utils'
 import { refManager } from '../../../lib/ref-manager'
 import { findBestSelector } from '../../../lib/selector-resolver'
+import { actionHistory } from '../../../lib/action-history'
 import type { ClickOptions } from '../../types'
 
 export const clickCommand = createCommand<ClickOptions>({
@@ -196,6 +197,11 @@ export const clickCommand = createCommand<ClickOptions>({
               spinner.text = `Found via ${textSelectorResult.strategy}: ${selector}...`
             }
           } else {
+            // If not a CSS selector and no element found by text, throw clear error
+            const isCss = /^[#.]/.test(selector) || /[.\[\]\>\+\~:]/.test(selector) || /^[a-z]+$/i.test(selector)
+            if (!isCss) {
+              throw new Error(`Element not found by text: "${selector}". Try using a CSS selector or check the page content with 'snapshot'.`)
+            }
             // Fallback to using selector as-is (CSS selector)
             actualSelector = selector
           }
@@ -223,6 +229,13 @@ export const clickCommand = createCommand<ClickOptions>({
         })
 
         await page.click(actualSelector, clickOptions)
+        
+        // Track the click action
+        actionHistory.addAction({
+          type: 'click',
+          target: actualSelector,
+          tabId: tabId
+        })
       }
     })
 

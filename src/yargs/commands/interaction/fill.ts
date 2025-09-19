@@ -9,6 +9,7 @@ import { createCommand } from '../../lib/command-builder'
 import { BrowserHelper } from '../../../lib/browser-helper'
 import { refManager } from '../../../lib/ref-manager'
 import { findBestSelector } from '../../../lib/selector-resolver'
+import { actionHistory } from '../../../lib/action-history'
 import type { FillOptions } from '../../types'
 import chalk from 'chalk'
 
@@ -138,6 +139,15 @@ export const fillCommand = createCommand<FillWithRefOptions>({
       await BrowserHelper.withTargetPage(port, tabIndex, tabId, async page => {
         try {
           await page.fill(storedSelector, value, { timeout: timeout as number })
+          
+          // Track the fill action
+          actionHistory.addAction({
+            type: 'fill',
+            target: storedSelector,
+            value: value,
+            tabId: tabId
+          })
+          
           logger.success(`Filled [ref=${ref}] with "${value}"`)
         } catch (err: any) {
           logger.error(`Failed to fill [ref=${ref}]: ${err.message}`)
@@ -161,6 +171,10 @@ export const fillCommand = createCommand<FillWithRefOptions>({
     let filledCount = 0
     const errors: string[] = []
     const results: Array<{ field: string; value: string; success: boolean; error?: string }> = []
+
+    // Detect legacy vs enhanced syntax
+    const hasEqualsFields = fields!.some(field => field.includes('='))
+    const isLegacySyntax = !hasEqualsFields && fields!.length >= 2 && fields!.length % 2 === 0
 
     // Get available field names for suggestions
     let availableFields: string[] = []
@@ -190,13 +204,74 @@ export const fillCommand = createCommand<FillWithRefOptions>({
         // Ignore errors in getting field names
       }
       
-      for (const field of fields!) {
-        const [selectorPart, ...valueParts] = field.split('=')
-        const value = valueParts.join('=') // Handle values with = in them
+      if (isLegacySyntax) {
+        // Legacy syntax: fill "selector" "value" "selector2" "value2"
+        for (let i = 0; i < fields!.length; i += 2) {
+          const selector = fields![i]
+          const value = fields![i + 1]
+          
+          try {
+            await page.fill(selector, value, { timeout: timeout as number })
+            
+            // Track the fill action
+            actionHistory.addAction({
+              type: 'fill',
+              target: selector,
+              value: value,
+              tabId: tabId
+            })
+            
+            if (!quiet && !json) {
+              console.log(`  ✓ Filled ${selector} with "${value}"`)
+            }
+            results.push({ field: selector, value, success: true })
+            filledCount++
+          } catch (err: any) {
+            const errorMsg = `Failed to fill ${selector}: ${err.message}`
+            errors.push(errorMsg)
+            results.push({ field: selector, value, success: false, error: err.message })
+            if (!quiet && !json) {
+              console.log(`  ⚠️  ${errorMsg}`)
+            }
+          }
+        }
+      } else {
+        // Enhanced syntax: fill "field=value" "field2=value2"
+        for (const field of fields!) {
+          // Check for malformed input (no equals sign)
+          if (!field.includes('=')) {
+            const errorMsg = `invalid format: ${field}. Use selector=value`
+            errors.push(errorMsg)
+            results.push({ field, value: '', success: false, error: 'invalid format' })
+            if (!quiet && !json) {
+              console.log(`  ⚠️  ${errorMsg}`)
+            }
+            continue
+          }
+        
+        // Handle CSS attribute selectors like [name=username]=value correctly
+        let selectorPart: string
+        let value: string
+        
+        if (field.startsWith('[') && field.includes(']=')) {
+          // CSS attribute selector: [name=username]=value
+          const closeBracketIndex = field.indexOf(']=')
+          selectorPart = field.substring(0, closeBracketIndex + 1) // Include the closing ]
+          value = field.substring(closeBracketIndex + 2) // Skip ]=
+        } else {
+          // Regular selector: #id=value or .class=value
+          const [selector, ...valueParts] = field.split('=')
+          selectorPart = selector
+          value = valueParts.join('=') // Handle values with = in them
+        }
 
-        if (!selectorPart || value === undefined || value === '') {
-          errors.push(`Invalid field format: ${field}. Use selector=value`)
-          results.push({ field, value: '', success: false, error: 'Invalid format' })
+        if (!selectorPart) {
+          const errorMsg = `invalid format: ${field}. Use selector=value`
+          errors.push(errorMsg)
+          results.push({ field, value: '', success: false, error: 'invalid format' })
+          if (!quiet && !json) {
+            console.log(`  ⚠️  ${errorMsg}`)
+          }
           continue
         }
 
@@ -211,6 +286,9 @@ export const fillCommand = createCommand<FillWithRefOptions>({
             localFormScope = parts[0]
             actualSelector = parts[1]
           }
+          
+          // Skip attribute selector fixing - let CSS parser handle it
+          // The field=value parsing should have already separated the selector from the value
           
           // For simple identifiers (no CSS selector syntax), try field-specific resolution
           if (!actualSelector.startsWith('#') && !actualSelector.startsWith('.') && !actualSelector.startsWith('[')) {
@@ -291,6 +369,12 @@ export const fillCommand = createCommand<FillWithRefOptions>({
                   `${localFormScope} ${textSelectorResult.selector}` : 
                   textSelectorResult.selector
                 strategy = textSelectorResult.strategy
+              } else {
+                // If not a CSS selector and no element found by text, throw clear error
+                const isCss = /^[#.]/.test(actualSelector) || /[.\[\]\>\+\~:]/.test(actualSelector) || /^[a-z]+$/i.test(actualSelector)
+                if (!isCss) {
+                  throw new Error(`Element not found by text: "${actualSelector}". Try using a CSS selector or check the page content with 'snapshot'.`)
+                }
               }
             }
           }
@@ -302,12 +386,21 @@ export const fillCommand = createCommand<FillWithRefOptions>({
           // Check if element exists before trying to fill
           const element = await page.$(actualSelector)
           if (!element) {
-            throw new Error(`Element not found: ${actualSelector}`)
+            throw new Error(`not found: ${actualSelector}`)
           }
           
           await page.fill(actualSelector, value, { timeout: timeout as number })
+          
+          // Track the fill action
+          actionHistory.addAction({
+            type: 'fill',
+            target: selectorPart,
+            value: value,
+            tabId: tabId
+          })
+          
           if (!quiet && !json) {
-            logger.info(`  ✓ Filled ${selectorPart} with "${value}"`)
+            console.log(`  ✓ Filled ${selectorPart} with "${value}"`)
           }
           results.push({ field: selectorPart, value, success: true })
           filledCount++
@@ -328,8 +421,15 @@ export const fillCommand = createCommand<FillWithRefOptions>({
             }
           }
           
-          errors.push(`Failed to fill ${selectorPart}: ${errorMsg}`)
+          const fullErrorMsg = `Failed to fill ${selectorPart}: ${errorMsg}`
+          errors.push(fullErrorMsg)
           results.push({ field: selectorPart, value, success: false, error: errorMsg })
+          
+          // Display error immediately for better visibility
+          if (!quiet && !json) {
+            console.log(`  ⚠️  ${fullErrorMsg}`)
+          }
+        }
         }
       }
     })
@@ -348,23 +448,19 @@ export const fillCommand = createCommand<FillWithRefOptions>({
         results
       }, null, 2))
     } else if (!quiet) {
-      // Normal output
-      if (errors.length > 0) {
-        errors.forEach(error => logger.warn(`  ⚠️  ${error}`))
-      }
-      
       // Report summary - use proper pluralization
-      const fieldWord = fields!.length === 1 ? 'field' : 'fields'
-      const summaryMsg = filledCount === fields!.length ? 
-        `✅ Filled ${filledCount} ${fieldWord}${tabTarget}` :
+      const actualFieldCount = isLegacySyntax ? fields!.length / 2 : fields!.length
+      const fieldWord = actualFieldCount === 1 ? 'field' : 'fields'
+      const summaryMsg = filledCount === actualFieldCount ? 
+        `filled ${filledCount} ${fieldWord}${tabTarget}` :
         filledCount === 0 ?
-        `❌ Failed to fill any ${fieldWord}${tabTarget}` :
-        `⚠️  Filled ${filledCount} of ${fields!.length} ${fieldWord}${tabTarget}`
+        `Failed to fill any ${fieldWord}${tabTarget}` :
+        `filled ${filledCount} of ${actualFieldCount} ${fieldWord}${tabTarget}`
       
-      if (filledCount === fields!.length) {
-        logger.success(summaryMsg)
+      if (filledCount === actualFieldCount) {
+        console.log(`✅ ${summaryMsg}`)
       } else {
-        logger.warn(summaryMsg)
+        console.log(`⚠️ ${summaryMsg}`)
       }
     }
   },

@@ -117,6 +117,12 @@ export const hoverCommand = createCommand<HoverOptions>({
           if (spinner) {
             spinner.text = `Found via ${textSelectorResult.strategy}: ${actualSelector}...`
           }
+        } else {
+          // If not a CSS selector and no element found by text, throw clear error
+          const isCss = /^[#.]/.test(actualSelector) || /[.\[\]\>\+\~:]/.test(actualSelector) || /^[a-z]+$/i.test(actualSelector)
+          if (!isCss) {
+            throw new Error(`Element not found by text: "${actualSelector}". Try using a CSS selector or check the page content with 'snapshot'.`)
+          }
         }
       }
       

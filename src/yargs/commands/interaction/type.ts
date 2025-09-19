@@ -20,7 +20,7 @@ export const typeCommand = createCommand<TypeOptions>({
     aliases: [],
   },
 
-  command: 'type <selector> <text>',
+  command: 'type [selector] [text]',
   describe: 'Type text into an element',
 
   builder: yargs => {
@@ -28,12 +28,12 @@ export const typeCommand = createCommand<TypeOptions>({
       .positional('selector', {
         describe: 'Element selector or text to find (use --ref for ref-based selection)',
         type: 'string',
-        demandOption: true,
+        demandOption: false,
       })
       .positional('text', {
         describe: 'Text to type',
         type: 'string',
-        demandOption: true,
+        demandOption: false,
       })
       .option('ref', {
         describe: 'Use a ref from snapshot command',
@@ -78,22 +78,45 @@ export const typeCommand = createCommand<TypeOptions>({
     const tabId = argv['tab-id'] as string | undefined
     const ref = argv.ref as string | undefined
     
-    // Get text and selector from argv - now both are required positionals
-    const text = argv.text as string
-    let selector = argv.selector as string | undefined
+    // Smart argument resolution
+    let text: string
+    let selector: string | undefined
     
-    // Special case: if using --ref, selector can be a dummy value
-    if (ref && selector === '-') {
-      selector = undefined
+    if (ref) {
+      // When using --ref, we expect: type --ref <ref> <text>
+      // yargs parses this as: selector=<text>, text=undefined
+      // OR: type <dummy> --ref <ref> <text> 
+      // yargs parses this as: selector=<dummy>, text=<text>
+      
+      if (argv.text) {
+        // Case: type <dummy> --ref <ref> <text>
+        selector = argv.selector as string
+        text = argv.text as string
+        // If selector is a dummy value, ignore it
+        if (selector === '-' || selector === 'dummy' || selector === 'placeholder') {
+          selector = undefined
+        }
+      } else if (argv.selector) {
+        // Case: type --ref <ref> <text>
+        // The <text> gets parsed as selector
+        text = argv.selector as string
+        selector = undefined
+      } else {
+        throw new Error('Text to type is required')
+      }
+    } else {
+      // Normal case: type <selector> <text>
+      selector = argv.selector as string | undefined
+      text = argv.text as string
+      
+      if (!selector || !text) {
+        throw new Error('Both selector and text are required when not using --ref')
+      }
     }
     
-    // Determine what to type into
+    // Validate that we have either selector or ref
     if (!selector && !ref) {
       throw new Error('Either selector or --ref must be provided')
-    }
-    
-    if (!text) {
-      throw new Error('Text to type is required')
     }
 
     const tabTarget =
@@ -170,6 +193,11 @@ export const typeCommand = createCommand<TypeOptions>({
               spinner.text = `Found via ${textSelectorResult.strategy}: ${selector}...`
             }
           } else {
+            // If not a CSS selector and no element found by text, throw clear error
+            const isCss = /^[#.]/.test(selector) || /[.\[\]\>\+\~:]/.test(selector) || /^[a-z]+$/i.test(selector)
+            if (!isCss) {
+              throw new Error(`Element not found by text: "${selector}". Try using a CSS selector or check the page content with 'snapshot'.`)
+            }
             // Fallback to using selector as-is (CSS selector)
             actualSelector = selector
           }

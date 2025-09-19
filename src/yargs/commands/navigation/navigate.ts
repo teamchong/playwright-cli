@@ -7,6 +7,7 @@
 
 import { createCommand } from '../../lib/command-builder'
 import { BrowserHelper } from '../../../lib/browser-helper'
+import { actionHistory } from '../../../lib/action-history'
 import type { NavigateOptions } from '../../types'
 
 export const navigateCommand = createCommand<NavigateOptions>({
@@ -108,6 +109,13 @@ export const navigateCommand = createCommand<NavigateOptions>({
         }
 
         await page.goto(url, navigationOptions)
+
+        // Track the navigation action
+        actionHistory.addAction({
+          type: 'navigate',
+          target: url,
+          tabId: tabId
+        })
 
         // Get page info
         const title = await page.title()
