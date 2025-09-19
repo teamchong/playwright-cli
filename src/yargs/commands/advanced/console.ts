@@ -49,10 +49,16 @@ export const consoleCommand = createCommand<ConsoleOptions>({
         describe: 'Target specific tab by unique ID',
         type: 'string',
       })
+      .option('monitor', {
+        describe: 'Continuously monitor console output',
+        type: 'boolean',
+        default: false,
+        alias: 'm',
+      })
       .conflicts('tab-index', 'tab-id')
-      .example('$0 console', 'Monitor all console messages')
-      .example('$0 console --filter error', 'Monitor only error messages')
-      .example('$0 console --once', 'Show current messages and exit')
+      .example('$0 console', 'Show all console messages from the page')
+      .example('$0 console --monitor', 'Continuously monitor console messages')
+      .example('$0 console --filter error', 'Show only error messages')
   },
 
   handler: async cmdContext => {
@@ -68,7 +74,7 @@ export const consoleCommand = createCommand<ConsoleOptions>({
         async page => {
           const messages: any[] = []
 
-          // Set up console message listener
+          // Set up console message listener BEFORE any actions
           page.on('console', msg => {
             const type = msg.type()
             const text = msg.text()
@@ -86,9 +92,8 @@ export const consoleCommand = createCommand<ConsoleOptions>({
 
             messages.push(messageData)
 
-            if (argv.json) {
-              logger.info(JSON.stringify(messageData))
-            } else {
+            // Log messages in real-time if not in JSON mode
+            if (!argv.json) {
               const prefix =
                 type === 'error'
                   ? chalk.red('❌')
@@ -106,20 +111,29 @@ export const consoleCommand = createCommand<ConsoleOptions>({
           // Get tab ID for reference
           const pageTabId = await BrowserHelper.getPageId(page)
 
-          // Trigger a console message to capture any buffered messages
-          try {
-            await page.evaluate('console.log("Playwright CLI snapshot")')
-          } catch (e) {
-            // Ignore evaluation errors
+          // Always reload the page to capture all messages from the beginning
+          // Users expect to see ALL console messages when they run this command
+          const currentUrl = page.url()
+          if (currentUrl && currentUrl !== 'about:blank') {
+            await page.reload()
+            // Wait for the page to load
+            await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
           }
 
-          // Wait briefly for messages to be captured (500ms)
+          // If monitor mode, keep running indefinitely
+          if (argv.monitor) {
+            logger.info(`📡 Monitoring console output for tab: ${pageTabId}`)
+            logger.info('Press Ctrl+C to stop...')
+
+            // Keep the process running
+            await new Promise(() => {})
+          }
+
+          // Otherwise, wait briefly to capture any immediate messages
           await new Promise(resolve => setTimeout(resolve, 500))
 
-          // Filter out our own test message
-          const filteredMessages = messages.filter(
-            m => m.text !== 'Playwright CLI snapshot'
-          )
+          // Show all captured messages
+          const filteredMessages = messages
 
           if (argv.json) {
             logger.json({
@@ -135,7 +149,8 @@ export const consoleCommand = createCommand<ConsoleOptions>({
               logger.info('📋 No console messages')
             } else {
               logger.info(`📋 ${filteredMessages.length} message(s) captured:`)
-              filteredMessages.slice(0, 10).forEach(msg => {
+              // Show ALL messages, not just first 10
+              filteredMessages.forEach(msg => {
                 const prefix =
                   msg.type === 'error'
                     ? chalk.red('❌')
@@ -146,9 +161,6 @@ export const consoleCommand = createCommand<ConsoleOptions>({
                         : chalk.blue('ℹ️')
                 logger.info(`  ${prefix} [${msg.type}] ${msg.text}`)
               })
-              if (filteredMessages.length > 10) {
-                logger.info(`  ... and ${filteredMessages.length - 10} more`)
-              }
             }
           }
         }
