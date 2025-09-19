@@ -8,118 +8,91 @@ The Playwright CLI provides direct browser control through Chrome DevTools Proto
 
 ## Command Usage Patterns
 
-### 🚨 IMPORTANT: Troubleshooting Without Refreshing
-```bash
-# When user asks to check for errors, use these commands INSTEAD of 'open':
-
-playwright inspect                           # Check current page for ALL errors (console, network, etc.)
-playwright inspect --verbose                 # Include warnings and detailed state
-playwright context                           # See page state and recent actions
-
-# The 'open' command NOW REUSES existing tabs if URL matches - won't refresh!
-# This prevents losing error state when troubleshooting
-```
-
 ### Installation & Setup
 ```bash
-playwright close                             # Close the browser
-playwright install [browser]                 # Install browser binaries
+playwright install           # Install Playwright browsers (chromium, firefox, webkit)
+playwright install chromium  # Install only Chromium browser
+playwright close             # Close browser connection
 ```
 
 ### Starting a Browser Session
 ```bash
-playwright open [url]                        # Open browser (REUSES tab if URL already open!)
-playwright open -n [url]                     # Force new tab with -n flag
+playwright open              # Smart open - launches Chrome or connects if running
+playwright open <url>        # Open browser and navigate to URL
+playwright open --port 9222  # Use specific debugging port
+playwright open -n <url>     # Always open URL in a new tab
+playwright open --new-tab <url>  # Same as -n
 ```
 
 ### Navigation
 ```bash
-playwright navigate <url>                    # Navigate to a URL
-playwright back                              # Navigate back in browser history
+playwright navigate <url>              # Navigate to a URL
+playwright back                        # Go back in browser history
+playwright forward                     # Go forward in browser history (TODO: implement)
 ```
 
 ### Interaction
 ```bash
-playwright wait [selector]                   # Wait for element or timeout
-playwright click [selector]                  # Click on an element
-playwright hover [selector]                  # Hover over an element
-playwright type [selector] [text]            # Type text into an element
-playwright fill [fields...]                  # Fill form fields with values
-playwright select <selector> <values...>     # Select option(s) in a dropdown
-playwright drag <selector> <target>          # Drag from source to target element
-playwright press <key>                       # Press a keyboard key
-playwright upload <selector> <files...>      # Upload file(s) to a file input
+playwright click <selector>            # Click on an element
+playwright type <selector> <text>      # Type text into an input
+playwright press <key>                 # Press a keyboard key (e.g., Enter, Escape)
+playwright fill <fields...>            # Fill multiple form fields (selector=value pairs)
+playwright select <selector> <values> # Select dropdown option(s)
+playwright hover <selector>            # Hover over an element
+playwright drag <source> <target>      # Drag from source to target element
+playwright upload <selector> <files>   # Upload file(s) to a file input
+playwright wait [selector]             # Wait for element or timeout
 ```
 
 ### Capture & Analysis
 ```bash
-playwright screenshot [path]                 # Take a screenshot
-playwright pdf [path]                        # Save page as PDF
-playwright snapshot                          # Capture interactive elements from
+playwright screenshot [path]           # Capture screenshot
+playwright pdf [path]                  # Save page as PDF
+playwright snapshot                    # Get accessibility tree snapshot
 ```
 
 ### Advanced Operations
 ```bash
-playwright list                              # List open pages and contexts
-playwright eval <expression>                 # Execute JavaScript in the browser
-playwright exec [file]                       # Execute JavaScript/TypeScript file
-playwright console                           # Capture browser console output
-playwright network                           # Monitor network requests
-playwright dialog <action>                   # Handle browser dialogs (alert,
-playwright perf                              # View performance statistics and
-playwright codegen [url]                     # Open Playwright code generator
-playwright test [spec]                       # Run Playwright tests
+playwright eval <code>                 # Execute JavaScript in browser context
+playwright exec <file>                 # Execute JavaScript file in browser
+playwright console                     # Monitor console output
+playwright network                     # Monitor network requests
+playwright dialog <accept|dismiss>     # Handle browser dialogs
+playwright list                        # List open pages and contexts
+playwright codegen [url]               # Generate Playwright test code interactively
+playwright test [spec]                 # Run Playwright tests
 ```
 
 ### Window Management
 ```bash
-playwright tabs [action]                     # Manage browser tabs
-playwright resize <width> <height>           # Resize browser window
+playwright tabs [action]               # Manage tabs (list, new, close, select)
+playwright resize <width> <height>     # Resize browser window
 ```
 
 ### Session Management
 ```bash
-playwright session <action>                  # Manage browser sessions
+playwright session save <name>         # Save current browser state
+playwright session load <name>         # Restore saved session
+playwright session list                # Show saved sessions
 ```
 
 ## Best Practices
 
 1. **Use smart open**: The `open` command automatically connects or launches as needed
-2. **Use -n or --newTab**: When opening multiple URLs to keep them in separate tabs
+2. **Use --new-tab**: When opening multiple URLs, use `-n` flag to keep them in separate tabs
 3. **Use specific selectors**: Prefer ID and class selectors over complex XPath
 4. **Wait for elements**: Use `playwright wait` before interacting with dynamic content
 5. **Save sessions**: For repetitive tasks, save and reuse sessions
 
 ## Common Workflows
 
-### Troubleshooting Page Errors (NEW!)
-```bash
-# User: "Can you check why my page isn't working?"
-
-# DON'T DO THIS (refreshes and loses error state):
-playwright open "https://mysite.com"  # ❌ This might clear console errors!
-
-# DO THIS INSTEAD:
-playwright inspect                    # ✅ Check errors without refresh
-playwright context                    # ✅ See what actions led to error
-playwright snapshot                   # ✅ See current page elements
-
-# If user's page is showing errors:
-playwright inspect --verbose          # Get all details including warnings
-# The command will show:
-# - Console errors with suggestions
-# - Failed network requests
-# - Page load state
-# - Visible error messages on page
-```
-
 ### Web Scraping
 ```bash
-playwright open "https://example.com"  # Or: playwright navigate "https://example.com"
+playwright open "https://example.com"
 playwright wait ".content"
 playwright snapshot                    # Get page structure
 playwright eval "document.querySelector('.data').innerText"
-playwright screenshot output.png       # Screenshots the current page
+playwright screenshot output.png
 ```
 
 ### Form Automation
@@ -134,33 +107,156 @@ playwright click "button[type='submit']"
 playwright wait ".success"
 ```
 
-### Note on Documentation
-
-This documentation is auto-generated from the CLI help output.
-To regenerate: `npm run generate-docs` or `node scripts/generate-docs.js`
-
-## Detailed Command Examples
-
-### Screenshot Options
+### Advanced Interaction
 ```bash
-playwright screenshot --full-page output.png    # Capture full scrollable page
-playwright screenshot --selector ".content"     # Capture specific element
-playwright screenshot --tab-index 0            # Screenshot specific tab
+playwright open "https://app.example.com"
+playwright hover ".menu-trigger"       # Hover to show menu
+playwright drag ".item" ".drop-zone"   # Drag and drop
+playwright press "Escape"              # Press keyboard key
+playwright upload "#file-input" document.pdf report.xlsx
+```
+
+### PDF Generation
+```bash
+playwright open "https://report.example.com"
+playwright wait ".report-ready"
+playwright resize 1200 800             # Set specific viewport
+playwright pdf report.pdf
+```
+
+### Network Monitoring
+```bash
+playwright open "https://api.example.com"
+playwright network                     # Start monitoring
+# Perform actions...
+# Press Ctrl+C to stop monitoring
+```
+
+### Tab Management
+```bash
+playwright tabs list                   # List all open tabs
+playwright tabs new --url "https://example.com"
+playwright tabs select --index 2       # Switch to tab 2
+playwright tabs close --index 0        # Close first tab
+```
+
+### Test Generation & Execution
+```bash
+playwright codegen                     # Start recording interactions
+playwright codegen "https://example.com"  # Start recording from URL
+playwright test                        # Run all tests
+playwright test tests/login.spec.ts    # Run specific test file
+playwright test --ui                   # Open test UI mode
+playwright test --debug                # Run tests in debug mode
 ```
 
 ### JavaScript Execution
 ```bash
-playwright eval "document.title"               # Get page title
+playwright eval "document.title"       # Execute inline JavaScript
 playwright eval "Array.from(document.querySelectorAll('a')).map(a => a.href)"
-playwright exec /tmp/script.js                 # Execute file
+playwright exec script.js              # Execute JavaScript file
 echo "console.log(location.href)" | playwright exec  # Execute from stdin
 ```
 
+## Writing Complex Automation Scripts
+
+Claude Code can write JavaScript files that use the Playwright CLI's execution context. These scripts have access to:
+- `page` - Current page object
+- `context` - Browser context for creating new pages/tabs
+- `browser` - Browser instance
+
+### Example: Multi-Page Automation Script
+```javascript
+// Save as /tmp/automation.js and run with: playwright exec /tmp/automation.js
+async function automateMultipleSites() {
+  // Work with current page
+  await page.goto('https://example.com');
+  await page.fill('#search', 'query');
+  await page.click('button[type="submit"]');
+  
+  // Create new tabs
+  const newPage = await context.newPage();
+  await newPage.goto('https://another-site.com');
+  
+  // Extract and return data
+  const data = await page.evaluate(() => {
+    return document.querySelector('.results')?.textContent;
+  });
+  
+  console.log('Results:', data);
+  return data;
+}
+
+automateMultipleSites();
+```
+
+### Example: Data Extraction Script
+```javascript
+// Save as /tmp/scraper.js
+async function scrapeData() {
+  const results = [];
+  
+  for (let i = 1; i <= 5; i++) {
+    await page.goto(`https://example.com/page/${i}`);
+    
+    const pageData = await page.evaluate(() => {
+      return Array.from(document.querySelectorAll('.item')).map(el => ({
+        title: el.querySelector('.title')?.textContent,
+        price: el.querySelector('.price')?.textContent
+      }));
+    });
+    
+    results.push(...pageData);
+  }
+  
+  // Save results
+  require('fs').writeFileSync('/tmp/data.json', JSON.stringify(results));
+  console.log(`Scraped ${results.length} items`);
+  return results;
+}
+
+scrapeData();
+```
+
+### Execution Pattern
+1. Claude Code writes the script to `/tmp/script.js`
+2. Execute with: `playwright exec /tmp/script.js`
+3. Script has full access to Playwright API
+4. Results are returned to stdout
+
 ## Error Handling
 
-- If Chrome is not installed, run: `playwright install chromium`
+- If Chrome is not installed, suggest: `playwright install chromium`
 - If connection fails, check if another Chrome instance is using the debugging port
-- For selector not found errors, use `playwright list` to inspect page structure
+- For selector not found errors, suggest using `playwright list` to inspect page structure
+
+## Expected Output Examples
+
+### Successful Commands
+```bash
+$ playwright open https://example.com
+✅ Connected to Chrome at localhost:9222
+🌐 Navigated to: https://example.com
+
+$ playwright click "button.submit"
+✅ Clicked element: button.submit
+
+$ playwright screenshot
+📸 Screenshot saved: screenshot-2024-01-15-143022.png
+
+$ playwright eval "document.title"
+📊 Result: "Example Domain"
+```
+
+### Error Outputs
+```bash
+$ playwright click ".nonexistent"
+❌ Element not found: .nonexistent
+
+$ playwright open
+❌ Failed to connect to Chrome
+💡 Try: playwright install chromium
+```
 
 ## Integration Notes
 
@@ -168,3 +264,18 @@ echo "console.log(location.href)" | playwright exec  # Execute from stdin
 - Sessions persist browser state including cookies and localStorage
 - Screenshots default to PNG format in the current directory
 - JavaScript evaluation returns results as formatted output
+- All commands exit cleanly after completion (exit code 0 on success, 1 on error)
+
+## When NOT to Use
+
+- For simple HTTP requests, use curl or fetch instead
+- For API testing, use dedicated API testing tools
+- For unit testing JavaScript, use test frameworks directly
+
+## Troubleshooting
+
+If browser doesn't launch:
+1. Check if Chrome/Chromium is installed
+2. Try `playwright install chromium` to install Playwright's browser
+3. Verify no other process is using port 9222
+4. Try with explicit port: `playwright open --port 9223`

@@ -1,86 +1,137 @@
 #!/bin/bash
 
-# Playwright CLI Installation Script
-# This script builds the CLI, generates documentation, and installs it locally
+# Playwright CLI Installer
+set -e
 
-set -e  # Exit on error
+INSTALL_DIR="$HOME/.local/bin"
+# Use environment variable if set, otherwise default to ~/.claude
+CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 
-echo "🚀 Playwright CLI Installation"
-echo "=============================="
+echo "🎭 Playwright CLI Installer"
+echo "==========================="
+echo ""
 
-# Check for required tools
-echo "📋 Checking requirements..."
-
+# Check for Node.js (required for pkg compilation)
 if ! command -v node &> /dev/null; then
-    echo "❌ Node.js is required but not installed"
-    echo "   Please install Node.js from https://nodejs.org"
+    echo "❌ Error: Node.js is not installed"
+    echo ""
+    echo "Please install Node.js first"
     exit 1
 fi
 
-if ! command -v pnpm &> /dev/null; then
-    echo "❌ pnpm is required but not installed"
-    echo "   Installing pnpm..."
-    npm install -g pnpm
+# Build the binary
+echo "🔨 Building playwright CLI..."
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# Check if dependencies are installed
+if [ ! -d "node_modules" ]; then
+    echo "📦 Installing dependencies..."
+    if command -v pnpm &> /dev/null; then
+        pnpm install
+    else
+        npm install
+    fi
+    echo "✅ Dependencies installed"
 fi
 
-# Install dependencies
-echo "📦 Installing dependencies..."
-pnpm install
-
-# Build the CLI
-echo "🔨 Building Playwright CLI..."
-pnpm run build
-
-# Generate documentation
-echo "📝 Generating documentation..."
-pnpm run generate-docs
-
-# Install locally
-echo "📂 Installing to ~/.local/bin..."
-mkdir -p ~/.local/bin
-cp playwright ~/.local/bin/
-chmod +x ~/.local/bin/playwright
-
-# Check if ~/.local/bin is in PATH
-if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-    echo ""
-    echo "⚠️  ~/.local/bin is not in your PATH"
-    echo "   Add this to your shell configuration file:"
-    echo ""
-    echo "   export PATH=\"\$HOME/.local/bin:\$PATH\""
-    echo ""
-    echo "   For bash: ~/.bashrc or ~/.bash_profile"
-    echo "   For zsh:  ~/.zshrc"
-fi
-
-# Install Playwright browsers
-echo ""
-echo "🌐 Installing Playwright browsers..."
-echo "   This may take a few minutes on first install..."
-~/.local/bin/playwright install chromium
-
-# Test the installation
-echo ""
-echo "✅ Testing installation..."
-if ~/.local/bin/playwright --version &> /dev/null; then
-    echo "   Playwright CLI installed successfully!"
-    ~/.local/bin/playwright --version
+# Build the binary
+if command -v pnpm &> /dev/null; then
+    pnpm run build
 else
-    echo "❌ Installation test failed"
+    npm run build
+fi
+echo "✅ Build complete"
+
+# Check if binary was built successfully
+if [ ! -f "$SCRIPT_DIR/playwright" ]; then
+    echo "❌ Build failed - binary not found"
     exit 1
 fi
 
+# Create directories
+mkdir -p "$INSTALL_DIR"
+mkdir -p "$CLAUDE_DIR"
+
+# Install binary
+echo "📦 Installing to $INSTALL_DIR..."
+cp playwright "$INSTALL_DIR/"
+chmod +x "$INSTALL_DIR/playwright"
+
+# Update CLAUDE.md with Playwright CLI instructions
 echo ""
-echo "🎉 Installation complete!"
+echo "📝 Updating CLAUDE.md with Playwright CLI instructions..."
+# Claude Code looks for CLAUDE.md in ~/.claude/CLAUDE.md by default
+CLAUDE_MD="$CLAUDE_DIR/CLAUDE.md"
+if [ -f "$CLAUDE_MD" ]; then
+    # Existing file - update it
+    cp "$CLAUDE_MD" "$CLAUDE_MD.backup"
+    
+    # Check if section exists and remove it if found
+    if grep -q "<!-- BEGIN PLAYWRIGHT-CLI -->" "$CLAUDE_MD.backup"; then
+        # Remove existing PLAYWRIGHT-CLI section including surrounding newlines
+        perl -0pe 's/\n*<!-- BEGIN PLAYWRIGHT-CLI -->.*?<!-- END PLAYWRIGHT-CLI -->\n*//gs' "$CLAUDE_MD.backup" > "$CLAUDE_MD.tmp"
+    else
+        # No section to remove, just copy the file
+        cp "$CLAUDE_MD.backup" "$CLAUDE_MD.tmp"
+    fi
+    
+    # Trim all trailing newlines from the file
+    perl -pi -e 'chomp if eof' "$CLAUDE_MD.tmp" 2>/dev/null || sed -i '' -e :a -e '/^\s*$/d;N;ba' "$CLAUDE_MD.tmp"
+    
+    # Check if file is empty or has content
+    if [ ! -s "$CLAUDE_MD.tmp" ]; then
+        # File is empty, no need for leading newlines
+        true  # No-op
+    else
+        # File has content, add appropriate spacing
+        echo "" >> "$CLAUDE_MD.tmp"
+        echo "" >> "$CLAUDE_MD.tmp"
+    fi
+    echo "<!-- BEGIN PLAYWRIGHT-CLI -->" >> "$CLAUDE_MD.tmp"
+    
+    # Copy content from CLAUDE_INSTRUCTIONS.md if it exists
+    if [ -f "$SCRIPT_DIR/CLAUDE_INSTRUCTIONS.md" ]; then
+        cat "$SCRIPT_DIR/CLAUDE_INSTRUCTIONS.md" >> "$CLAUDE_MD.tmp"
+    else
+        # Fallback minimal content if file not found
+        echo "## Playwright CLI" >> "$CLAUDE_MD.tmp"
+        echo "Browser automation tool. Run 'playwright claude' for documentation." >> "$CLAUDE_MD.tmp"
+    fi
+    
+    echo "<!-- END PLAYWRIGHT-CLI -->" >> "$CLAUDE_MD.tmp"
+    
+    mv "$CLAUDE_MD.tmp" "$CLAUDE_MD"
+    echo "✅ Updated CLAUDE.md with Playwright CLI instructions"
+else
+    # New file - create with section from CLAUDE_INSTRUCTIONS.md
+    mkdir -p "$CLAUDE_DIR"
+    
+    echo "<!-- BEGIN PLAYWRIGHT-CLI -->" > "$CLAUDE_MD"
+    
+    # Copy content from CLAUDE_INSTRUCTIONS.md if it exists
+    if [ -f "$SCRIPT_DIR/CLAUDE_INSTRUCTIONS.md" ]; then
+        cat "$SCRIPT_DIR/CLAUDE_INSTRUCTIONS.md" >> "$CLAUDE_MD"
+    else
+        # Fallback minimal content if file not found
+        echo "## Playwright CLI" >> "$CLAUDE_MD"
+        echo "Browser automation tool. Run 'playwright claude' for documentation." >> "$CLAUDE_MD"
+    fi
+    
+    echo "<!-- END PLAYWRIGHT-CLI -->" >> "$CLAUDE_MD"
+    
+    echo "✅ Created CLAUDE.md with Playwright CLI instructions"
+fi
+
+# Check if PATH contains install directory
+if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+    echo ""
+    echo "⚠️  Add $INSTALL_DIR to your PATH:"
+    echo "    echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc"
+    echo "    source ~/.zshrc"
+fi
+
 echo ""
-echo "Usage examples:"
-echo "  playwright open https://example.com"
-echo "  playwright screenshot output.png"
-echo "  playwright --help"
+echo "✅ Installation complete!"
 echo ""
-echo "Documentation:"
-echo "  - CLAUDE.md: Auto-generated command reference"
-echo "  - CLAUDE_INSTRUCTIONS.md: Detailed usage guide"
-echo ""
-echo "To keep docs updated after changes:"
-echo "  pnpm run generate-docs"
+echo "Run 'playwright' to see all available commands"

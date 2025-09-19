@@ -175,7 +175,7 @@ export const networkCommand = createCommand<NetworkOptions>({
       })
 
       // Get tab ID for reference
-      const tabId = BrowserHelper.getPageId(page)
+      const tabId = await BrowserHelper.getPageId(page)
 
       // Capture current network state and exit immediately
       // Wait briefly to capture any active requests (500ms)

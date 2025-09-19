@@ -104,7 +104,7 @@ export const consoleCommand = createCommand<ConsoleOptions>({
           })
 
           // Get tab ID for reference
-          const tabId = BrowserHelper.getPageId(page)
+          const pageTabId = await BrowserHelper.getPageId(page)
 
           // Trigger a console message to capture any buffered messages
           try {
@@ -124,13 +124,13 @@ export const consoleCommand = createCommand<ConsoleOptions>({
           if (argv.json) {
             logger.json({
               success: true,
-              tabId,
+              tabId: pageTabId,
               messages: filteredMessages,
               count: filteredMessages.length,
               timestamp: new Date().toISOString(),
             })
           } else {
-            logger.success(`✅ Console snapshot for tab: ${tabId}`)
+            logger.success(`✅ Console snapshot for tab: ${pageTabId}`)
             if (filteredMessages.length === 0) {
               logger.info('📋 No console messages')
             } else {
