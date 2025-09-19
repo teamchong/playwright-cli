@@ -87,7 +87,7 @@ describe('console command - REAL TESTS', () => {
     it('should have correct command definition', () => {
       const { output, exitCode } = runCommand(`${CLI} console --help`)
       expect(exitCode).toBe(0)
-      expect(output).toContain('Monitor browser console output')
+      expect(output).toContain('Capture browser console output')
       expect(output).toContain('console')
     })
   })
@@ -95,16 +95,17 @@ describe('console command - REAL TESTS', () => {
   describe('handler execution', () => {
     it('should monitor console with global session', () => {
       // Console command with global browser session should work but we test with timeout
-      const { output, exitCode } = runCommand(`${CLI} console --once`, 2000)
+      // Note: console now reloads page and captures all messages by default
+      const { output, exitCode } = runCommand(`${CLI} console`, 5000)
       // Console command may succeed or timeout, both are acceptable
       expect([0, 1]).toContain(exitCode)
     })
 
     it('should monitor console with specific tab ID', () => {
-      // Test console monitoring with --once flag to avoid hanging
+      // Test console monitoring - it will reload and capture all messages
       const { output, exitCode } = runCommand(
-        `${CLI} console --once --tab-id ${testTabId}`,
-        3000
+        `${CLI} console --tab-id ${testTabId}`,
+        5000
       )
       // Console command may succeed or timeout, both are acceptable for this test
       expect([0, 1]).toContain(exitCode)
@@ -112,8 +113,8 @@ describe('console command - REAL TESTS', () => {
 
     it('should handle invalid tab ID gracefully', () => {
       const { output, exitCode } = runCommand(
-        `${CLI} console --once --tab-id "INVALID_ID"`,
-        2000
+        `${CLI} console --tab-id "INVALID_ID"`,
+        3000
       )
       expect(exitCode).toBe(1)
       expect(output).toMatch(/not found/i)

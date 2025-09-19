@@ -198,7 +198,22 @@ export const contextCommand: CommandModule<{}, ContextArgs> = {
       )
 
       if (argv.json) {
-        logger.info(JSON.stringify(context, null, 2))
+        // Flatten the structure for JSON output to match expected format
+        const jsonOutput = {
+          url: context.page.url,
+          title: context.page.title,
+          domain: context.page.domain,
+          readyState: context.page.readyState,
+          loadTime: context.page.loadTime,
+          elements: context.elements,
+          forms: context.forms,
+          navigation: context.navigation,
+          history: context.actions.recent || [],
+          lastAction: context.actions.last,
+          tabInfo: context.tabInfo,
+          viewport: context.viewport
+        }
+        logger.info(JSON.stringify(jsonOutput, null, 2))
       } else {
         // Format output for human reading
         logger.info(chalk.blue('📍 Current Page Context'))
@@ -209,12 +224,15 @@ export const contextCommand: CommandModule<{}, ContextArgs> = {
         logger.info(`${chalk.green('Title:')} ${context.page.title}`)
         logger.info(`${chalk.green('Domain:')} ${context.page.domain}`)
         logger.info(`${chalk.green('State:')} ${context.page.readyState}`)
-        
+
+        // Always show load time info
         if (context.page.loadTime && typeof context.page.loadTime === 'number') {
-          const loadTimeDesc = context.page.loadTime < 1000 
-            ? `${context.page.loadTime}ms` 
+          const loadTimeDesc = context.page.loadTime < 1000
+            ? `${context.page.loadTime}ms`
             : `${(context.page.loadTime / 1000).toFixed(1)}s`
-          logger.info(`${chalk.green('Load Time:')} ${loadTimeDesc}`)
+          logger.info(`${chalk.green('Load time:')} ${loadTimeDesc} ago`)
+        } else {
+          logger.info(`${chalk.green('Load time:')} Page loaded`)
         }
 
         logger.info('')
@@ -248,19 +266,20 @@ export const contextCommand: CommandModule<{}, ContextArgs> = {
         logger.info(`  Can go back: ${context.navigation.canGoBack ? chalk.green('Yes') : chalk.gray('No')}`)
         logger.info(`  History length: ${context.navigation.historyLength}`)
         
-        // Recent actions
+        // Recent actions - always show section even if empty
+        logger.info('')
+        logger.info(chalk.blue('📜 Recent Actions'))
         const actions = context.actions as any
-        if (actions && (actions.recent?.length > 0 || actions.last)) {
-          logger.info('')
-          logger.info(chalk.blue('📜 Recent Actions'))
-          if (actions.last) {
-            logger.info(`  Last action: ${actions.last}`)
-          }
-          if (actions.recent && actions.recent.length > 0) {
-            actions.recent.forEach((action: string) => {
+        if (actions && actions.recent && actions.recent.length > 0) {
+          actions.recent.forEach((action: string, index: number) => {
+            if (index === 0 && actions.last) {
+              logger.info(`  Last: ${action}`)
+            } else {
               logger.info(`  - ${action}`)
-            })
-          }
+            }
+          })
+        } else {
+          logger.info(`  ${chalk.gray('No recent actions')}`)
         }
         
         // Tab info

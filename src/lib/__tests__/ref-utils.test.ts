@@ -141,7 +141,8 @@ describe('ref-utils', () => {
 
     it('should create textbox selector with aria-label', () => {
       const node = { role: 'textbox', name: 'Email' }
-      expect(nodeToSelector(node)).toBe('input[aria-label="Email"]')
+      // The function now returns a compound selector for better matching
+      expect(nodeToSelector(node)).toBe('input[placeholder="Email"], input[aria-label="Email"]')
     })
 
     it('should create textbox selector with value', () => {
