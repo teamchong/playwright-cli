@@ -122,12 +122,21 @@ export const execCommand = createCommand<ExecuteOptions>({
           const AsyncFunction = Object.getPrototypeOf(
             async function () {}
           ).constructor
+
+          // If code is a single expression without explicit return, add implicit return
+          // This handles cases like "await page.title()" -> "return await page.title()"
+          let wrappedCode = code.trim()
+          if (!wrappedCode.includes('return') && !wrappedCode.includes(';')) {
+            // Single expression - add implicit return
+            wrappedCode = `return ${wrappedCode}`
+          }
+
           const executeCode = new AsyncFunction(
             'page',
             'context',
             'browser',
             'console',
-            code
+            wrappedCode
           )
 
           // Create a console wrapper that captures output
