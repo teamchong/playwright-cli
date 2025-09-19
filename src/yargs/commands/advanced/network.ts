@@ -68,8 +68,8 @@ export const networkCommand = createCommand<NetworkOptions>({
       const requests: any[] = []
       const requestMap = new Map<string, any>()
 
-      // Set up request listener
-      page.on('request', request => {
+      // Create handler functions for proper cleanup
+      const requestHandler = (request: any) => {
         const url = request.url()
         const method = request.method()
 
@@ -98,10 +98,9 @@ export const networkCommand = createCommand<NetworkOptions>({
             `${chalk.cyan(`→ ${method} ${requestInfo.resourceType}`)} ${url}`
           )
         }
-      })
+      }
 
-      // Set up response listener
-      page.on('response', response => {
+      const responseHandler = (response: any) => {
         const url = response.url()
         const status = response.status()
         const request = response.request()
@@ -143,10 +142,9 @@ export const networkCommand = createCommand<NetworkOptions>({
                 : chalk.green
           logger.info(`${statusColor(`← ${status}`)} ${url}`)
         }
-      })
+      }
 
-      // Set up request failed listener
-      page.on('requestfailed', request => {
+      const requestFailedHandler = (request: any) => {
         const url = request.url()
         const method = request.method()
 
@@ -172,46 +170,58 @@ export const networkCommand = createCommand<NetworkOptions>({
         }
 
         requests.push(failureInfo)
-      })
+      }
 
-      // Get tab ID for reference
-      const tabId = await BrowserHelper.getPageId(page)
+      try {
+        // Set up event listeners
+        page.on('request', requestHandler)
+        page.on('response', responseHandler)
+        page.on('requestfailed', requestFailedHandler)
 
-      // Capture current network state and exit immediately
-      // Wait briefly to capture any active requests (500ms)
-      await new Promise(resolve => setTimeout(resolve, 500))
+        // Get tab ID for reference
+        const tabId = await BrowserHelper.getPageId(page)
 
-      if (argv.json) {
-        logger.json({
-          success: true,
-          tabId,
-          requests,
-          count: requests.length,
-          timestamp: new Date().toISOString(),
-        })
-      } else {
-        logger.success(`✅ Network snapshot for tab: ${tabId}`)
-        if (requests.length === 0) {
-          logger.info(`📡 No active network requests`)
-        } else {
-          logger.info(`📡 ${requests.length} request(s) captured:`)
-          requests.slice(0, 10).forEach(req => {
-            const method = req.request?.method || 'GET'
-            const status = req.response?.status
-            const statusColor =
-              status >= 400
-                ? chalk.red
-                : status >= 300
-                  ? chalk.yellow
-                  : chalk.green
-            logger.info(
-              `  ${method} ${req.url} ${status ? statusColor(status) : ''}`
-            )
+        // Capture current network state and exit immediately
+        // Wait briefly to capture any active requests (500ms)
+        await new Promise(resolve => setTimeout(resolve, 500))
+
+        if (argv.json) {
+          logger.json({
+            success: true,
+            tabId,
+            requests,
+            count: requests.length,
+            timestamp: new Date().toISOString(),
           })
-          if (requests.length > 10) {
-            logger.info(`  ... and ${requests.length - 10} more`)
+        } else {
+          logger.success(`✅ Network snapshot for tab: ${tabId}`)
+          if (requests.length === 0) {
+            logger.info(`📡 No active network requests`)
+          } else {
+            logger.info(`📡 ${requests.length} request(s) captured:`)
+            requests.slice(0, 10).forEach(req => {
+              const method = req.request?.method || 'GET'
+              const status = req.response?.status
+              const statusColor =
+                status >= 400
+                  ? chalk.red
+                  : status >= 300
+                    ? chalk.yellow
+                    : chalk.green
+              logger.info(
+                `  ${method} ${req.url} ${status ? statusColor(status) : ''}`
+              )
+            })
+            if (requests.length > 10) {
+              logger.info(`  ... and ${requests.length - 10} more`)
+            }
           }
         }
+      } finally {
+        // CRITICAL: Remove event listeners to prevent memory leaks
+        page.off('request', requestHandler)
+        page.off('response', responseHandler)
+        page.off('requestfailed', requestFailedHandler)
       }
     } catch (error: any) {
       cmdContext.logger.error(`Failed to monitor network: ${error.message}`)

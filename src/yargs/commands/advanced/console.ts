@@ -74,8 +74,8 @@ export const consoleCommand = createCommand<ConsoleOptions>({
         async page => {
           const messages: any[] = []
 
-          // Set up console message listener BEFORE any actions
-          page.on('console', msg => {
+          // Create console message handler function for proper cleanup
+          const consoleHandler = (msg: any) => {
             const type = msg.type()
             const text = msg.text()
 
@@ -106,62 +106,70 @@ export const consoleCommand = createCommand<ConsoleOptions>({
               const output = `${prefix} [${type}] ${text}`
               logger.info(output)
             }
-          })
-
-          // Get tab ID for reference
-          const pageTabId = await BrowserHelper.getPageId(page)
-
-          // Always reload the page to capture all messages from the beginning
-          // Users expect to see ALL console messages when they run this command
-          const currentUrl = page.url()
-          if (currentUrl && currentUrl !== 'about:blank') {
-            await page.reload()
-            // Wait for the page to load
-            await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
           }
 
-          // If monitor mode, keep running indefinitely
-          if (argv.monitor) {
-            logger.info(`📡 Monitoring console output for tab: ${pageTabId}`)
-            logger.info('Press Ctrl+C to stop...')
+          try {
+            // Set up console message listener BEFORE any actions
+            page.on('console', consoleHandler)
 
-            // Keep the process running
-            await new Promise(() => {})
-          }
+            // Get tab ID for reference
+            const pageTabId = await BrowserHelper.getPageId(page)
 
-          // Otherwise, wait briefly to capture any immediate messages
-          await new Promise(resolve => setTimeout(resolve, 500))
-
-          // Show all captured messages
-          const filteredMessages = messages
-
-          if (argv.json) {
-            logger.json({
-              success: true,
-              tabId: pageTabId,
-              messages: filteredMessages,
-              count: filteredMessages.length,
-              timestamp: new Date().toISOString(),
-            })
-          } else {
-            logger.success(`✅ Console snapshot for tab: ${pageTabId}`)
-            if (filteredMessages.length === 0) {
-              logger.info('📋 No console messages')
-            } else {
-              logger.info(`📋 ${filteredMessages.length} message(s) captured:`)
-              // Show ALL messages, not just first 10
-              filteredMessages.forEach(msg => {
-                const prefix =
-                  msg.type === 'error'
-                    ? chalk.red('❌')
-                    : msg.type === 'warning'
-                      ? chalk.yellow('⚠️')
-                      : msg.type === 'debug'
-                        ? chalk.gray('🐛')
-                        : chalk.blue('ℹ️')
-                logger.info(`  ${prefix} [${msg.type}] ${msg.text}`)
-              })
+            // Always reload the page to capture all messages from the beginning
+            // Users expect to see ALL console messages when they run this command
+            const currentUrl = page.url()
+            if (currentUrl && currentUrl !== 'about:blank') {
+              await page.reload()
+              // Wait for the page to load
+              await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
             }
+
+            // If monitor mode, keep running indefinitely
+            if (argv.monitor) {
+              logger.info(`📡 Monitoring console output for tab: ${pageTabId}`)
+              logger.info('Press Ctrl+C to stop...')
+
+              // Keep the process running
+              await new Promise(() => {})
+            }
+
+            // Otherwise, wait briefly to capture any immediate messages
+            await new Promise(resolve => setTimeout(resolve, 500))
+
+            // Show all captured messages
+            const filteredMessages = messages
+
+            if (argv.json) {
+              logger.json({
+                success: true,
+                tabId: pageTabId,
+                messages: filteredMessages,
+                count: filteredMessages.length,
+                timestamp: new Date().toISOString(),
+              })
+            } else {
+              logger.success(`✅ Console snapshot for tab: ${pageTabId}`)
+              if (filteredMessages.length === 0) {
+                logger.info('📋 No console messages')
+              } else {
+                logger.info(`📋 ${filteredMessages.length} message(s) captured:`)
+                // Show ALL messages, not just first 10
+                filteredMessages.forEach(msg => {
+                  const prefix =
+                    msg.type === 'error'
+                      ? chalk.red('❌')
+                      : msg.type === 'warning'
+                        ? chalk.yellow('⚠️')
+                        : msg.type === 'debug'
+                          ? chalk.gray('🐛')
+                          : chalk.blue('ℹ️')
+                  logger.info(`  ${prefix} [${msg.type}] ${msg.text}`)
+                })
+              }
+            }
+          } finally {
+            // CRITICAL: Remove event listener to prevent memory leaks
+            page.off('console', consoleHandler)
           }
         }
       )
