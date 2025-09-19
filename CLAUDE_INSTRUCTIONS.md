@@ -8,6 +8,18 @@ The Playwright CLI provides direct browser control through Chrome DevTools Proto
 
 ## Command Usage Patterns
 
+### 🚨 IMPORTANT: Troubleshooting Without Refreshing
+```bash
+# When user asks to check for errors, use these commands INSTEAD of 'open':
+
+playwright inspect                           # Check current page for ALL errors (console, network, etc.)
+playwright inspect --verbose                 # Include warnings and detailed state
+playwright context                           # See page state and recent actions
+
+# The 'open' command NOW REUSES existing tabs if URL matches - won't refresh!
+# This prevents losing error state when troubleshooting
+```
+
 ### Installation & Setup
 ```bash
 playwright close                             # Close the browser
@@ -16,7 +28,8 @@ playwright install [browser]                 # Install browser binaries
 
 ### Starting a Browser Session
 ```bash
-playwright open [url]                        # Open browser (connects if running,
+playwright open [url]                        # Open browser (REUSES tab if URL already open!)
+playwright open -n [url]                     # Force new tab with -n flag
 ```
 
 ### Navigation
@@ -78,6 +91,27 @@ playwright session <action>                  # Manage browser sessions
 5. **Save sessions**: For repetitive tasks, save and reuse sessions
 
 ## Common Workflows
+
+### Troubleshooting Page Errors (NEW!)
+```bash
+# User: "Can you check why my page isn't working?"
+
+# DON'T DO THIS (refreshes and loses error state):
+playwright open "https://mysite.com"  # ❌ This might clear console errors!
+
+# DO THIS INSTEAD:
+playwright inspect                    # ✅ Check errors without refresh
+playwright context                    # ✅ See what actions led to error
+playwright snapshot                   # ✅ See current page elements
+
+# If user's page is showing errors:
+playwright inspect --verbose          # Get all details including warnings
+# The command will show:
+# - Console errors with suggestions
+# - Failed network requests
+# - Page load state
+# - Visible error messages on page
+```
 
 ### Web Scraping
 ```bash

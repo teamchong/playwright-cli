@@ -185,9 +185,32 @@ export const openCommand = createCommand<OpenOptions>({
             logger.info(`Opened new tab: ${fullUrl}`)
             logger.info(`Tab ID: ${tabId}`)
           } else {
-            // Use existing tab or create new one
+            // Check if URL is already open in any tab - if so, reuse it
             const pages = context.pages()
-            if (pages.length > 0) {
+            let existingPage = null
+            
+            for (const page of pages) {
+              const currentUrl = page.url()
+              // Check if URL matches (normalize trailing slash)
+              const normalizedCurrent = currentUrl.replace(/\/$/, '')
+              const normalizedTarget = fullUrl.replace(/\/$/, '')
+              
+              if (normalizedCurrent === normalizedTarget || 
+                  currentUrl.startsWith(fullUrl) || 
+                  fullUrl.startsWith(currentUrl)) {
+                existingPage = page
+                break
+              }
+            }
+            
+            if (existingPage) {
+              // URL is already open - just switch to that tab
+              await existingPage.bringToFront()
+              tabId = await BrowserHelper.getPageId(existingPage)
+              logger.info(`✅ Already on ${fullUrl} - using existing tab`)
+              logger.info(`Tab ID: ${tabId}`)
+            } else if (pages.length > 0) {
+              // Use first available tab and navigate
               await pages[0].goto(fullUrl)
               tabId = await BrowserHelper.getPageId(pages[0])
               logger.info(`Navigated to: ${fullUrl}`)
