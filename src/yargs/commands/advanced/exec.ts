@@ -64,7 +64,6 @@ export const execCommand = createCommand<ExecuteOptions>({
         type: 'string',
       })
       .conflicts('tab-index', 'tab-id')
-      .conflicts('file', 'inline')
       .example('$0 exec script.js', 'Execute a JavaScript file')
       .example(
         'echo "console.log(location.href)" | $0 exec',
@@ -89,9 +88,10 @@ export const execCommand = createCommand<ExecuteOptions>({
       const { argv, logger } = cmdContext
 
       // Get code from file, inline, or stdin
+      // Priority: inline > file > stdin
       let code: string
       if (argv.inline) {
-        // Use inline code
+        // Use inline code (highest priority)
         code = argv.inline as string
         logger.info(`⚡ Executing inline JavaScript...`)
       } else if (argv.file) {
