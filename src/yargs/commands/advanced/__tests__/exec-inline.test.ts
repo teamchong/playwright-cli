@@ -271,7 +271,7 @@ describe('inline script execution enhancement', () => {
       `
       
       const { output, exitCode } = runCommand(
-        `echo "${script}" | ${CLI} exec --inline - --tab-id ${testTabId}`
+        `echo "${script}" | ${CLI} exec --tab-id ${testTabId}`
       )
       
       expect(exitCode).toBe(0)
