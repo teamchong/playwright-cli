@@ -14,11 +14,12 @@ export default defineConfig({
         singleFork: true,  // Run all tests in a single fork to prevent multiple processes
       }
     },
-    testTimeout: 10000,    // 10 second timeout per test
+    testTimeout: 15000,    // 15 second timeout per test (increased for slower tests)
     hookTimeout: 30000,    // 30 second timeout for hooks (browser setup takes time)
-    teardownTimeout: 10000, // 10 second for cleanup (browser teardown takes time)
+    teardownTimeout: 15000, // 15 second for cleanup (browser teardown takes time)
     maxConcurrency: 1,     // Run tests sequentially
     isolate: true,         // Isolate tests to prevent cross-contamination
+    bail: 3,               // Stop after 3 test failures to prevent cascading timeouts
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

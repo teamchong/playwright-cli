@@ -10,7 +10,7 @@ export default function teardown() {
   console.log('🧹 Cleaning up after all tests...')
 
   try {
-    // Clean up all tabs created during tests
+    // Clean up ONLY tabs created during tests
     console.log('🗂️  Closing test tabs...')
     TabManager.cleanupAllCreatedTabs()
 

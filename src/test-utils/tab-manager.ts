@@ -50,6 +50,34 @@ export class TabManager {
   }
 
   /**
+   * Register a tab ID for cleanup
+   * Use this when tests create tabs directly via CLI
+   */
+  static registerTab(tabId: string): void {
+    this.createdTabs.add(tabId)
+  }
+
+  /**
+   * Unregister a tab ID (when manually closed)
+   */
+  static unregisterTab(tabId: string): void {
+    this.createdTabs.delete(tabId)
+  }
+
+  /**
+   * Extract tab ID from CLI output and register it
+   */
+  static extractAndRegisterTabId(output: string): string {
+    const tabIdMatch = output.match(/Tab ID: ([a-fA-F0-9]+)/)
+    if (!tabIdMatch) {
+      throw new Error(`Could not extract tab ID from output: ${output}`)
+    }
+    const tabId = tabIdMatch[1]
+    this.registerTab(tabId)
+    return tabId
+  }
+
+  /**
    * Create a new tab and return its ID for use in tests
    */
   static createTab(url?: string): string {
@@ -147,7 +175,7 @@ export class TabManager {
       return false
     }
 
-    const { output, exitCode } = this.runCommand(
+    const { exitCode } = this.runCommand(
       `${this.CLI} tabs close --index ${tab.index}`
     )
     this.createdTabs.delete(tabId)
