@@ -198,7 +198,14 @@ export const execCommand = createCommand<ExecuteOptions>({
               )
             )
           } else if (result !== undefined) {
-            logger.info(chalk.green('✅ Result:') + ' ' + String(result))
+            // Handle different result types appropriately
+            let resultString: string
+            if (typeof result === 'object' && result !== null) {
+              resultString = JSON.stringify(result, null, 2)
+            } else {
+              resultString = String(result)
+            }
+            logger.info(chalk.green('✅ Result:') + ' ' + resultString)
           } else {
             logger.success('Code executed successfully')
           }
