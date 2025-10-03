@@ -21,7 +21,7 @@ describe('test command - REAL TESTS', () => {
       const output = execSync(cmd, {
         encoding: 'utf8',
         timeout,
-        env: { ...process.env },
+        env: { ...process.env, NODE_ENV: undefined },
       })
       return { output, exitCode: 0 }
     } catch (error: any) {

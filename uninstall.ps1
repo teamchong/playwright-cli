@@ -12,12 +12,12 @@ function Write-Error { param($msg) Write-Host "❌ $msg" -ForegroundColor Red }
 if ($IsWindows -or $env:OS -eq "Windows_NT") {
     $INSTALL_DIR = "$env:LOCALAPPDATA\Programs\playwright-cli"
     $CLAUDE_DIR = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { "$env:USERPROFILE\.claude" }
-    $BINARY_NAME = "playwright.exe"
+    $BINARY_NAME = "pw.exe"
 } else {
     # Unix/macOS paths
     $INSTALL_DIR = "$HOME/.local/bin"
     $CLAUDE_DIR = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { "$HOME/.claude" }
-    $BINARY_NAME = "playwright"
+    $BINARY_NAME = "pw"
 }
 
 Write-Host "🗑️  Playwright CLI Uninstaller" -ForegroundColor Cyan
@@ -31,8 +31,8 @@ $removedItems = @()
 $binaryPath = Join-Path $INSTALL_DIR $BINARY_NAME
 if (Test-Path $binaryPath) {
     Remove-Item $binaryPath -Force
-    Write-Success "Removed playwright binary"
-    $removedItems += "Playwright CLI binary"
+    Write-Success "Removed pw binary"
+    $removedItems += "pw binary"
 } else {
     Write-Warning "Binary not found at $binaryPath"
 }
@@ -104,7 +104,7 @@ if ($removedItems.Count -gt 0) {
         Write-Host "  • $item" -ForegroundColor Gray
     }
 } else {
-    Write-Warning "Nothing to remove - Playwright CLI was not installed"
+    Write-Warning "Nothing to remove - pw was not installed"
 }
 Write-Host ""
 Write-Host "To reinstall, run: .\install.ps1" -ForegroundColor Cyan

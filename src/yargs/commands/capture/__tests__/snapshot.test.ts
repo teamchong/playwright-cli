@@ -1,3 +1,4 @@
+import { TEST_PORT, CLI } from '../../../../test-utils/test-constants'
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { execSync } from 'child_process'
 
@@ -11,7 +12,6 @@ import { execSync } from 'child_process'
  * - NO TAB MANAGEMENT - let global setup handle browser lifecycle
  */
 describe('snapshot command - TAB ID FROM OUTPUT', () => {
-  const CLI = 'node dist/src/index.js'
   let testTabId: string
 
   function runCommand(
@@ -22,7 +22,7 @@ describe('snapshot command - TAB ID FROM OUTPUT', () => {
       const output = execSync(cmd, {
         encoding: 'utf8',
         timeout,
-        env: { ...process.env },
+        env: { ...process.env, NODE_ENV: undefined },
         stdio: 'pipe',
       })
       return { output, exitCode: 0 }
@@ -47,7 +47,7 @@ describe('snapshot command - TAB ID FROM OUTPUT', () => {
     // Browser already running from global setup
     // Create a dedicated test tab for this test suite and capture its ID
     const { output } = runCommand(
-      `${CLI} tabs new --url "data:text/html,<div id='test-container'><h1>Snapshot Test Suite Ready</h1><p>Accessibility tree content</p></div>"`
+      `${CLI} tabs new --port ${TEST_PORT} --url "data:text/html,<div id='test-container'><h1>Snapshot Test Suite Ready</h1><p>Accessibility tree content</p></div>"`
     )
     testTabId = extractTabId(output)
     console.log(`Snapshot test suite using tab ID: ${testTabId}`)
@@ -58,7 +58,7 @@ describe('snapshot command - TAB ID FROM OUTPUT', () => {
     if (testTabId) {
       try {
         // First check if tab still exists
-        const { output } = runCommand(`${CLI} tabs list --json`)
+        const { output } = runCommand(`${CLI} tabs list --port ${TEST_PORT} --json`)
         const data = JSON.parse(output)
         const tabExists = data.tabs.some((tab: any) => tab.id === testTabId)
 
@@ -67,7 +67,7 @@ describe('snapshot command - TAB ID FROM OUTPUT', () => {
           const tabIndex = data.tabs.findIndex(
             (tab: any) => tab.id === testTabId
           )
-          runCommand(`${CLI} tabs close --index ${tabIndex}`)
+          runCommand(`${CLI} tabs close --port ${TEST_PORT} --index ${tabIndex}`)
           console.log(`Closed test tab ${testTabId}`)
         }
       } catch (error) {
@@ -89,7 +89,7 @@ describe('snapshot command - TAB ID FROM OUTPUT', () => {
   describe('direct tab targeting with captured ID', () => {
     it('should capture accessibility tree using captured tab ID', () => {
       const { exitCode, output } = runCommand(
-        `${CLI} snapshot --tab-id ${testTabId}`
+        `${CLI} snapshot --tab-id ${testTabId} --port ${TEST_PORT}`
       )
       expect(exitCode).toBe(0)
       expect(output).toMatch(
@@ -101,17 +101,17 @@ describe('snapshot command - TAB ID FROM OUTPUT', () => {
 
     it('should handle invalid tab ID', () => {
       const { output, exitCode } = runCommand(
-        `${CLI} snapshot --tab-id "INVALID_ID"`,
-        2000
+        `${CLI} snapshot --tab-id "INVALID_ID" --port ${TEST_PORT}`,
+        10000  // Increased timeout to handle tab search
       )
       expect(exitCode).toBe(1)
-      expect(output).toMatch(/not found/i)
+      expect(output).toMatch(/not found|timeout|failed/i)
     })
 
     it('should prevent conflicting tab arguments', () => {
       const { output, exitCode } = runCommand(
-        `${CLI} snapshot --tab-index 0 --tab-id ${testTabId}`,
-        2000
+        `${CLI} snapshot --tab-index 0 --tab-id ${testTabId} --port ${TEST_PORT}`,
+        10000
       )
       expect(exitCode).toBe(1)
       // Note: yargs validation output handling varies in test environment

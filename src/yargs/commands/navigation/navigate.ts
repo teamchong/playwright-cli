@@ -44,7 +44,7 @@ export const navigateCommand = createCommand<NavigateOptions>({
       .option('timeout', {
         describe: 'Navigation timeout in milliseconds',
         type: 'number',
-        default: 30000,
+        default: 10000,
         alias: 't',
       })
       .option('referer', {
@@ -108,13 +108,20 @@ export const navigateCommand = createCommand<NavigateOptions>({
           navigationOptions.referer = referer
         }
 
-        await page.goto(url, navigationOptions)
+        try {
+          await page.goto(url, navigationOptions)
+        } catch (error: any) {
+          if (error.message?.includes('Timeout') || error.message?.includes('timeout')) {
+            throw new Error(`Navigation timeout: Failed to load ${url} within ${timeout}ms`)
+          }
+          throw error
+        }
 
         // Track the navigation action
         actionHistory.addAction({
           type: 'navigate',
           target: url,
-          tabId: tabId
+          tabId: tabId,
         })
 
         // Get page info

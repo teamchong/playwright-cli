@@ -53,7 +53,8 @@ export const sessionCommand: CommandModule = {
             })
         },
         handler: async argv => {
-          const spinner = ora('Saving session...').start()
+          const isTTY = process.stdout.isTTY && process.stderr.isTTY
+          const spinner = isTTY ? ora('Saving session...').start() : null
 
           try {
             // Validate session name
@@ -69,11 +70,14 @@ export const sessionCommand: CommandModule = {
 
             // Check if session already exists
             if (SessionManager.sessionExists(argv.name)) {
-              spinner.info(
-                chalk.yellow(
-                  `⚠️  Session '${argv.name}' already exists, updating...`
-                )
+              const msg = chalk.yellow(
+                `⚠️  Session '${argv.name}' already exists, updating...`
               )
+              if (spinner) {
+                spinner.info(msg)
+              } else {
+                console.log(msg)
+              }
             }
 
             await SessionManager.saveSession(
@@ -82,17 +86,23 @@ export const sessionCommand: CommandModule = {
               argv.description
             )
 
-            spinner.succeed(
-              chalk.green(`✅ Session '${argv.name}' saved successfully`)
-            )
+            const successMsg = chalk.green(`✅ Session '${argv.name}' saved successfully`)
+            if (spinner) {
+              spinner.succeed(successMsg)
+            } else {
+              console.log(successMsg)
+            }
 
             if (argv.description) {
               logger.info(`   Description: ${argv.description}`)
             }
           } catch (error: any) {
-            spinner.fail(
-              chalk.red(`❌ Failed to save session: ${error.message}`)
-            )
+            const errorMsg = chalk.red(`❌ Failed to save session: ${error.message}`)
+            if (spinner) {
+              spinner.fail(errorMsg)
+            } else {
+              console.error(errorMsg)
+            }
 
             if (error.message.includes('No browser context found')) {
               logger.info('\n💡 Make sure browser is running and connected:')
@@ -126,18 +136,25 @@ export const sessionCommand: CommandModule = {
             })
         },
         handler: async argv => {
-          const spinner = ora('Loading session...').start()
+          const isTTY = process.stdout.isTTY && process.stderr.isTTY
+          const spinner = isTTY ? ora('Loading session...').start() : null
 
           try {
             await SessionManager.loadSession(argv.name, argv.port)
 
-            spinner.succeed(
-              chalk.green(`✅ Session '${argv.name}' loaded successfully`)
-            )
+            const successMsg = chalk.green(`✅ Session '${argv.name}' loaded successfully`)
+            if (spinner) {
+              spinner.succeed(successMsg)
+            } else {
+              console.log(successMsg)
+            }
           } catch (error: any) {
-            spinner.fail(
-              chalk.red(`❌ Failed to load session: ${error.message}`)
-            )
+            const errorMsg = chalk.red(`❌ Failed to load session: ${error.message}`)
+            if (spinner) {
+              spinner.fail(errorMsg)
+            } else {
+              console.error(errorMsg)
+            }
 
             if (error.message.includes('not found')) {
               logger.info('\n💡 Available sessions:')

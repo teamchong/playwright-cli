@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { execSync } from 'child_process'
 import * as fs from 'fs'
+import {
+  createTestTab,
+  closeTestTab,
+  cleanupAllTestTabs,
+} from '../../../../test-utils/test-helpers'
+import { TEST_PORT, CLI } from '../../../../test-utils/test-constants'
 
 /**
  * PDF Command Tests - TAB ID FROM COMMAND OUTPUT
@@ -12,7 +18,6 @@ import * as fs from 'fs'
  * - NO TAB MANAGEMENT - let global setup handle browser lifecycle
  */
 describe('pdf command - TAB ID FROM OUTPUT', () => {
-  const CLI = 'node dist/src/index.js'
   let testTabId: string
 
   function runCommand(
@@ -23,7 +28,7 @@ describe('pdf command - TAB ID FROM OUTPUT', () => {
       const output = execSync(cmd, {
         encoding: 'utf8',
         timeout,
-        env: { ...process.env },
+        env: { ...process.env, NODE_ENV: undefined },
         stdio: 'pipe',
       })
       return { output, exitCode: 0 }
@@ -46,11 +51,9 @@ describe('pdf command - TAB ID FROM OUTPUT', () => {
 
   beforeAll(async () => {
     // Browser already running from global setup
-    // Create a dedicated test tab for this test suite and capture its ID
-    const { output } = runCommand(
-      `${CLI} tabs new --url "data:text/html,<div id='test-container'><h1>PDF Test Suite Ready</h1><p>This content will be saved as PDF</p></div>"`
-    )
-    testTabId = extractTabId(output)
+    // Use shared helper to create and register tab for automatic cleanup
+    const html = `<div id='test-container'><h1>PDF Test Suite Ready</h1><p>This content will be saved as PDF</p></div>`
+    testTabId = createTestTab(html)
     console.log(`PDF test suite using tab ID: ${testTabId}`)
   })
 
@@ -65,7 +68,7 @@ describe('pdf command - TAB ID FROM OUTPUT', () => {
     if (testTabId) {
       try {
         // First check if tab still exists
-        const { output } = runCommand(`${CLI} tabs list --json`)
+        const { output } = runCommand(`${CLI} tabs list --port ${TEST_PORT} --json`)
         const data = JSON.parse(output)
         const tabExists = data.tabs.some((tab: any) => tab.id === testTabId)
 
@@ -74,7 +77,7 @@ describe('pdf command - TAB ID FROM OUTPUT', () => {
           const tabIndex = data.tabs.findIndex(
             (tab: any) => tab.id === testTabId
           )
-          runCommand(`${CLI} tabs close --index ${tabIndex}`)
+          runCommand(`${CLI} tabs close --index ${tabIndex} --port ${TEST_PORT}`)
           console.log(`Closed test tab ${testTabId}`)
         }
       } catch (error) {
@@ -96,8 +99,11 @@ describe('pdf command - TAB ID FROM OUTPUT', () => {
   describe('direct tab targeting with captured ID', () => {
     it('should generate PDF with default filename using captured tab ID', () => {
       const { exitCode, output } = runCommand(
-        `${CLI} pdf --tab-id ${testTabId}`
+        `${CLI} pdf --tab-id ${testTabId} --port ${TEST_PORT}`
       )
+      if (exitCode !== 0) {
+        console.error('PDF command failed with output:', output)
+      }
       expect(exitCode).toBe(0)
       expect(output).toMatch(/PDF saved|saved PDF/i)
 
@@ -110,7 +116,7 @@ describe('pdf command - TAB ID FROM OUTPUT', () => {
 
     it('should generate PDF with custom filename using captured tab ID', () => {
       const { exitCode, output } = runCommand(
-        `${CLI} pdf test-page.pdf --tab-id ${testTabId}`
+        `${CLI} pdf test-page.pdf --tab-id ${testTabId} --port ${TEST_PORT}`
       )
       expect(exitCode).toBe(0)
       expect(output).toMatch(/PDF saved|saved PDF/i)
@@ -122,7 +128,7 @@ describe('pdf command - TAB ID FROM OUTPUT', () => {
 
     it('should handle PDF format options using captured tab ID', () => {
       const { exitCode, output } = runCommand(
-        `${CLI} pdf test-custom.pdf --format A4 --landscape --tab-id ${testTabId}`
+        `${CLI} pdf test-custom.pdf --format A4 --landscape --tab-id ${testTabId} --port ${TEST_PORT}`
       )
       expect(exitCode).toBe(0)
       expect(output).toMatch(/PDF saved|saved PDF/i)
@@ -131,8 +137,8 @@ describe('pdf command - TAB ID FROM OUTPUT', () => {
 
     it('should handle invalid tab ID', () => {
       const { output, exitCode } = runCommand(
-        `${CLI} pdf --tab-id "INVALID_ID"`,
-        2000
+        `${CLI} pdf --tab-id "INVALID_ID" --port ${TEST_PORT}`,
+        5000 // Increased timeout to handle CDP connection attempt
       )
       expect(exitCode).toBe(1)
       expect(output).toMatch(/not found/i)
@@ -141,7 +147,7 @@ describe('pdf command - TAB ID FROM OUTPUT', () => {
     it('should prevent conflicting tab arguments', () => {
       const { output, exitCode } = runCommand(
         `${CLI} pdf --tab-index 0 --tab-id ${testTabId}`,
-        2000
+        10000
       )
       expect(exitCode).toBe(1)
       // Note: yargs validation output handling varies in test environment

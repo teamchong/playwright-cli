@@ -121,16 +121,44 @@ export const consoleCommand = createCommand<ConsoleOptions>({
             if (currentUrl && currentUrl !== 'about:blank') {
               await page.reload()
               // Wait for the page to load
-              await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+              await page
+                .waitForLoadState('networkidle', { timeout: 10000 })
+                .catch(() => {})
             }
 
-            // If monitor mode, keep running indefinitely
+            // If monitor mode, keep running for a reasonable time
             if (argv.monitor) {
               logger.info(`📡 Monitoring console output for tab: ${pageTabId}`)
               logger.info('Press Ctrl+C to stop...')
 
-              // Keep the process running
-              await new Promise(() => {})
+              // Keep monitoring for up to 30 seconds, then auto-exit
+              let timeoutHandle: NodeJS.Timeout | undefined
+              let signalHandler: (() => void) | undefined
+
+              try {
+                await new Promise<void>(resolve => {
+                  timeoutHandle = setTimeout(() => {
+                    logger.info('⏰ Monitor timeout reached (30s), exiting...')
+                    resolve()
+                  }, 30000)
+
+                  // Also handle process signals
+                  signalHandler = () => {
+                    if (timeoutHandle) clearTimeout(timeoutHandle)
+                    resolve()
+                  }
+
+                  process.once('SIGINT', signalHandler)
+                  process.once('SIGTERM', signalHandler)
+                })
+              } finally {
+                // Clean up timeout and listeners
+                if (timeoutHandle) clearTimeout(timeoutHandle)
+                if (signalHandler) {
+                  process.removeListener('SIGINT', signalHandler)
+                  process.removeListener('SIGTERM', signalHandler)
+                }
+              }
             }
 
             // Otherwise, wait briefly to capture any immediate messages
@@ -152,7 +180,9 @@ export const consoleCommand = createCommand<ConsoleOptions>({
               if (filteredMessages.length === 0) {
                 logger.info('📋 No console messages')
               } else {
-                logger.info(`📋 ${filteredMessages.length} message(s) captured:`)
+                logger.info(
+                  `📋 ${filteredMessages.length} message(s) captured:`
+                )
                 // Show ALL messages, not just first 10
                 filteredMessages.forEach(msg => {
                   const prefix =

@@ -18,16 +18,25 @@ async function isPortOpen(port: number): Promise<boolean> {
     const net = require('net')
     return new Promise(resolve => {
       const socket = net.createConnection(port, 'localhost')
+
+      const cleanup = () => {
+        socket.removeAllListeners()
+        if (!socket.destroyed) {
+          socket.destroy()
+        }
+      }
+
       socket.on('connect', () => {
-        socket.end()
+        cleanup()
         resolve(true)
       })
       socket.on('error', () => {
+        cleanup()
         resolve(false)
       })
       socket.setTimeout(1000)
       socket.on('timeout', () => {
-        socket.destroy()
+        cleanup()
         resolve(false)
       })
     })
@@ -108,6 +117,266 @@ export const openCommand = createCommand<OpenOptions>({
           spinner.text = 'Launching browser...'
         }
 
+        // Launch browser WITHOUT URL to avoid Chrome crashes on invalid URLs
+        // We'll navigate using Playwright which has better error handling
+        await BrowserHelper.launchChrome(argv.port, undefined, undefined)
+
+        if (spinner) {
+          spinner.succeed(`Browser launched on port ${argv.port}`)
+        }
+
+        // If URL was provided, navigate to it and validate
+        if (url) {
+          await BrowserHelper.withBrowser(argv.port, async browser => {
+            if (argv.verbose) console.log('withBrowser callback started')
+            const contexts = browser.contexts()
+            if (argv.verbose) console.log('Got contexts:', contexts.length)
+            const context =
+              contexts.length > 0 ? contexts[0] : await browser.newContext()
+            if (argv.verbose) console.log('Got context')
+            const pages = context.pages()
+            if (argv.verbose) console.log('Got pages:', pages.length)
+
+            let page
+            if (pages.length > 0) {
+              page = pages[0]
+            } else {
+              page = await context.newPage()
+            }
+            if (argv.verbose) console.log('Got page')
+
+            // Add protocol if missing
+            const urlString = url as string
+            const fullUrl = urlString.includes('://') ? urlString : `https://${urlString}`
+            if (argv.verbose) console.log('About to navigate to:', fullUrl)
+
+            // Navigate using Playwright which validates properly
+            const response = await Promise.race([
+              page.goto(fullUrl, {
+                waitUntil: 'domcontentloaded',
+                timeout: 5000,
+              }),
+              new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error(`Navigation timeout after 5000ms`)), 5000)
+              )
+            ])
+            if (argv.verbose) console.log('Navigation completed')
+
+            // Check if navigation succeeded
+            const finalUrl = page.url()
+            if (
+              !response ||
+              (response.status && response.status() >= 400) ||
+              finalUrl.includes('chrome-error://')
+            ) {
+              throw new Error(
+                `Cannot navigate to invalid URL or unreachable server: ${fullUrl}`
+              )
+            }
+
+            logger.success(`Navigated to ${url}`)
+          })
+        }
+
+        return // Exit early since launch handles navigation
+      }
+
+      // Port is open - try to connect, but handle zombie processes
+      try {
+        await BrowserHelper.withBrowser(argv.port, async browser => {
+          // Connection succeeded, browser is responsive
+          if (spinner) {
+            spinner.text = 'Browser connected'
+          }
+
+          // Get or create context
+          const contexts = browser.contexts()
+          let context =
+            contexts.length > 0 ? contexts[0] : await browser.newContext()
+
+          // Apply device emulation if specified
+          if (device) {
+            // This would need device registry implementation
+            logger.info(`Device emulation: ${device}`)
+          }
+
+          // Apply geolocation if specified
+          if (geolocation) {
+            const [latitude, longitude] = geolocation.split(',').map(Number)
+            if (!isNaN(latitude) && !isNaN(longitude)) {
+              await context.setGeolocation({ latitude, longitude })
+              await context.grantPermissions(['geolocation'])
+              logger.info(`Geolocation set to: ${latitude}, ${longitude}`)
+            } else {
+              throw new Error(
+                'Invalid geolocation format. Use: latitude,longitude'
+              )
+            }
+          }
+
+          // Apply timezone if specified
+          if (timezone) {
+            await context.setExtraHTTPHeaders({ timezone: timezone })
+            logger.info(`Timezone set to: ${timezone}`)
+          }
+
+          let tabId: string | undefined
+
+          // Handle URL navigation
+          if (url && typeof url === 'string') {
+            const fullUrl = url.includes('://') ? url : `https://${url}`
+
+            if (newWindow) {
+              // Create new context for new window
+              const newContext = await browser.newContext()
+              const page = await newContext.newPage()
+
+              const response = await page.goto(fullUrl, {
+                waitUntil: 'domcontentloaded',
+                timeout: 5000,
+              })
+              // Check if navigation succeeded
+              const finalUrl = page.url()
+              // Allow redirects but catch error pages
+              if (!response || response.status() >= 400 || finalUrl.includes('chrome-error://')) {
+                throw new Error(
+                  `Cannot navigate to invalid URL or unreachable server: ${fullUrl}`
+                )
+              }
+
+              tabId = await BrowserHelper.getPageId(page)
+              logger.info(`Opened new window: ${fullUrl}`)
+              logger.info(`Tab ID: ${tabId}`)
+            } else if (newTab) {
+              // Create new tab in existing context
+              const page = await context.newPage()
+
+              const response = await page.goto(fullUrl, {
+                waitUntil: 'domcontentloaded',
+                timeout: 5000,
+              })
+              // Check if navigation succeeded
+              const finalUrl = page.url()
+              // Allow redirects but catch error pages
+              if (!response || response.status() >= 400 || finalUrl.includes('chrome-error://')) {
+                throw new Error(
+                  `Cannot navigate to invalid URL or unreachable server: ${fullUrl}`
+                )
+              }
+
+              tabId = await BrowserHelper.getPageId(page)
+              logger.info(`Opened new tab: ${fullUrl}`)
+              logger.info(`Tab ID: ${tabId}`)
+            } else {
+              // Check if URL is already open in any tab - if so, reuse it
+              const pages = context.pages()
+              const existingPage = pages.find(p => p.url() === fullUrl)
+
+              if (existingPage) {
+                // URL is already open - just switch to that tab
+                await existingPage.bringToFront()
+                tabId = await BrowserHelper.getPageId(existingPage)
+                logger.info(`✅ Already on ${fullUrl} - using existing tab`)
+                logger.info(`Tab ID: ${tabId}`)
+              } else if (pages.length > 0) {
+                // Use first available tab and navigate
+                const response = await pages[0].goto(fullUrl, {
+                  waitUntil: 'domcontentloaded',
+                  timeout: 5000,
+                })
+                // Check if navigation succeeded
+                const finalUrl = pages[0].url()
+                // Allow redirects but catch error pages
+                if (!response || response.status() >= 400 || finalUrl.includes('chrome-error://')) {
+                  throw new Error(
+                    `Cannot navigate to invalid URL or unreachable server: ${fullUrl}`
+                  )
+                }
+
+                tabId = await BrowserHelper.getPageId(pages[0])
+                logger.info(`Navigated to: ${fullUrl}`)
+                logger.info(`Tab ID: ${tabId}`)
+              } else {
+                const page = await context.newPage()
+
+                const response = await page.goto(fullUrl, {
+                  waitUntil: 'domcontentloaded',
+                  timeout: 5000,
+                })
+                // Check if navigation succeeded
+                const finalUrl = page.url()
+                // Allow redirects but catch error pages
+                if (!response || response.status() >= 400 || finalUrl.includes('chrome-error://')) {
+                  throw new Error(
+                    `Cannot navigate to invalid URL or unreachable server: ${fullUrl}`
+                  )
+                }
+
+                tabId = await BrowserHelper.getPageId(page)
+                logger.info(`Opened new tab: ${fullUrl}`)
+                logger.info(`Tab ID: ${tabId}`)
+              }
+            }
+          } else {
+            // No URL specified, just ensure we have a tab and return its ID
+            const pages = context.pages()
+            if (pages.length > 0) {
+              tabId = await BrowserHelper.getPageId(pages[0])
+              logger.info(`Tab ID: ${tabId}`)
+            } else {
+              const page = await context.newPage()
+              tabId = await BrowserHelper.getPageId(page)
+              logger.info(`Created new tab`)
+              logger.info(`Tab ID: ${tabId}`)
+            }
+          }
+
+          if (spinner) {
+            spinner.succeed('Browser opened successfully')
+          }
+
+          logger.success(`Browser connected on port ${argv.port}`)
+
+          if (argv.json) {
+            console.log(
+              JSON.stringify({
+                success: true,
+                port: argv.port,
+                url: url || null,
+                newTab: newTab || false,
+                newWindow: newWindow || false,
+                device: device || null,
+                geolocation: geolocation || null,
+                timezone: timezone || null,
+                tabId: tabId || null,
+              })
+            )
+          }
+        })
+      } catch (connectionError: any) {
+        // Port is open but connection failed - zombie process detected
+        if (spinner) {
+          spinner.text = 'Zombie process detected, relaunching browser...'
+        }
+
+        // Kill the zombie process
+        try {
+          const { execSync: execSyncKill } = require('child_process')
+          execSyncKill(`lsof -ti:${argv.port} | xargs kill -9`, {
+            stdio: 'ignore',
+          })
+        } catch {
+          // If kill fails, continue anyway and try to launch
+        }
+
+        // Wait a bit for port to be released
+        await new Promise(resolve => setTimeout(resolve, 500))
+
+        // Now launch a fresh browser
+        if (spinner) {
+          spinner.text = 'Launching browser...'
+        }
+
         await BrowserHelper.launchChrome(
           argv.port,
           undefined,
@@ -118,159 +387,36 @@ export const openCommand = createCommand<OpenOptions>({
           spinner.succeed(`Browser launched on port ${argv.port}`)
         }
 
-        // If URL was provided, it's already handled by launchChrome
         if (url) {
           logger.success(`Navigated to ${url}`)
         }
 
-        return // Exit early since launch handles navigation
+        return
       }
-
-      // If browser is already running, connect to it
-      await BrowserHelper.withBrowser(argv.port, async browser => {
-        if (spinner) {
-          spinner.text = 'Browser connected'
-        }
-
-        // Get or create context
-        const contexts = browser.contexts()
-        let context =
-          contexts.length > 0 ? contexts[0] : await browser.newContext()
-
-        // Apply device emulation if specified
-        if (device) {
-          // This would need device registry implementation
-          logger.info(`Device emulation: ${device}`)
-        }
-
-        // Apply geolocation if specified
-        if (geolocation) {
-          const [latitude, longitude] = geolocation.split(',').map(Number)
-          if (!isNaN(latitude) && !isNaN(longitude)) {
-            await context.setGeolocation({ latitude, longitude })
-            await context.grantPermissions(['geolocation'])
-            logger.info(`Geolocation set to: ${latitude}, ${longitude}`)
-          } else {
-            throw new Error(
-              'Invalid geolocation format. Use: latitude,longitude'
-            )
-          }
-        }
-
-        // Apply timezone if specified
-        if (timezone) {
-          await context.setExtraHTTPHeaders({ timezone: timezone })
-          logger.info(`Timezone set to: ${timezone}`)
-        }
-
-        let tabId: string | undefined
-
-        // Handle URL navigation
-        if (url && typeof url === 'string') {
-          const fullUrl = url.includes('://') ? url : `https://${url}`
-
-          if (newWindow) {
-            // Create new context for new window
-            const newContext = await browser.newContext()
-            const page = await newContext.newPage()
-            await page.goto(fullUrl)
-            tabId = await BrowserHelper.getPageId(page)
-            logger.info(`Opened new window: ${fullUrl}`)
-            logger.info(`Tab ID: ${tabId}`)
-          } else if (newTab) {
-            // Create new tab in existing context
-            const page = await context.newPage()
-            await page.goto(fullUrl)
-            tabId = await BrowserHelper.getPageId(page)
-            logger.info(`Opened new tab: ${fullUrl}`)
-            logger.info(`Tab ID: ${tabId}`)
-          } else {
-            // Check if URL is already open in any tab - if so, reuse it
-            const pages = context.pages()
-            let existingPage = null
-            
-            for (const page of pages) {
-              const currentUrl = page.url()
-              // Check if URL matches (normalize trailing slash)
-              const normalizedCurrent = currentUrl.replace(/\/$/, '')
-              const normalizedTarget = fullUrl.replace(/\/$/, '')
-              
-              if (normalizedCurrent === normalizedTarget || 
-                  currentUrl.startsWith(fullUrl) || 
-                  fullUrl.startsWith(currentUrl)) {
-                existingPage = page
-                break
-              }
-            }
-            
-            if (existingPage) {
-              // URL is already open - just switch to that tab
-              await existingPage.bringToFront()
-              tabId = await BrowserHelper.getPageId(existingPage)
-              logger.info(`✅ Already on ${fullUrl} - using existing tab`)
-              logger.info(`Tab ID: ${tabId}`)
-            } else if (pages.length > 0) {
-              // Use first available tab and navigate
-              await pages[0].goto(fullUrl)
-              tabId = await BrowserHelper.getPageId(pages[0])
-              logger.info(`Navigated to: ${fullUrl}`)
-              logger.info(`Tab ID: ${tabId}`)
-            } else {
-              const page = await context.newPage()
-              await page.goto(fullUrl)
-              tabId = await BrowserHelper.getPageId(page)
-              logger.info(`Opened new tab: ${fullUrl}`)
-              logger.info(`Tab ID: ${tabId}`)
-            }
-          }
-        } else {
-          // No URL specified, just ensure we have a tab and return its ID
-          const pages = context.pages()
-          if (pages.length > 0) {
-            tabId = await BrowserHelper.getPageId(pages[0])
-            logger.info(`Tab ID: ${tabId}`)
-          } else {
-            const page = await context.newPage()
-            tabId = await BrowserHelper.getPageId(page)
-            logger.info(`Created new tab`)
-            logger.info(`Tab ID: ${tabId}`)
-          }
-        }
-
-        if (spinner) {
-          spinner.succeed('Browser opened successfully')
-        }
-
-        logger.success(`Browser connected on port ${argv.port}`)
-
-        if (argv.json) {
-          logger.json({
-            success: true,
-            port: argv.port,
-            url: url || null,
-            newTab: newTab || false,
-            newWindow: newWindow || false,
-            device: device || null,
-            geolocation: geolocation || null,
-            timezone: timezone || null,
-            tabId: tabId || null,
-          })
-        }
-      })
     } catch (error: any) {
       if (spinner) {
-        // Check if it's a connection refused error and provide user-friendly message
-        if (error.message && error.message.includes('ERR_CONNECTION_REFUSED')) {
-          spinner.fail(
-            'Connection failed - no server running at the specified URL'
-          )
+        // Check for various connection/navigation errors and provide user-friendly messages
+        if (
+          error.message &&
+          (error.message.includes('ERR_CONNECTION_REFUSED') ||
+            error.message.includes('Cannot navigate to invalid URL') ||
+            error.message.includes('net::ERR_') ||
+            error.message.includes('Protocol error'))
+        ) {
+          spinner.fail('Connection failed - no server running')
         } else {
           spinner.fail('Failed to open browser')
         }
       }
 
-      // Throw a custom error with user-friendly message for connection refused
-      if (error.message && error.message.includes('ERR_CONNECTION_REFUSED')) {
+      // Throw a custom error with user-friendly message for connection/navigation errors
+      if (
+        error.message &&
+        (error.message.includes('ERR_CONNECTION_REFUSED') ||
+          error.message.includes('Cannot navigate to invalid URL') ||
+          error.message.includes('net::ERR_') ||
+          error.message.includes('Protocol error'))
+      ) {
         throw new Error(
           'Connection failed - make sure a server is running at the target URL'
         )

@@ -108,13 +108,22 @@ export const tabsCommand = createCommand<TabOptions>({
           for (let i = 0; i < pages.length; i++) {
             const page = pages[i]
             const pageUrl = page.url()
-            const title = (await page.title()) || 'Untitled'
+            // Add timeout protection for page.title() which can hang
+            const title = await Promise.race([
+              page.title(),
+              new Promise<string>(resolve => setTimeout(() => resolve('Untitled'), 1000))
+            ]).catch(() => 'Untitled')
             const displayTitle = pageUrl === 'about:blank' ? 'New Tab' : title
 
-            // Get unique tab ID
+            // Get unique tab ID with timeout protection
             let tabId = ''
             try {
-              tabId = await BrowserHelper.getPageId(page)
+              tabId = await Promise.race([
+                BrowserHelper.getPageId(page),
+                new Promise<string>((_, reject) =>
+                  setTimeout(() => reject(new Error('Timeout getting page ID')), 1000)
+                )
+              ])
             } catch (error) {
               tabId = 'unknown'
             }
@@ -147,7 +156,7 @@ export const tabsCommand = createCommand<TabOptions>({
           const contexts = browser.contexts()
           if (contexts.length === 0) {
             throw new Error(
-              'No browser context available. Use "playwright open" first'
+              'No browser context available. Use "pw open" first'
             )
           }
 
@@ -200,7 +209,7 @@ export const tabsCommand = createCommand<TabOptions>({
               // Continue searching
             }
           }
-          
+
           if (!targetPage) {
             throw new Error(`Tab with ID ${tabId} not found`)
           }
@@ -218,10 +227,14 @@ export const tabsCommand = createCommand<TabOptions>({
         await targetPage.close()
 
         if (spinner) {
-          spinner.succeed(`Closed tab ${tabId ? `with ID ${tabId.slice(0, 8)}...` : targetIndex}`)
+          spinner.succeed(
+            `Closed tab ${tabId ? `with ID ${tabId.slice(0, 8)}...` : targetIndex}`
+          )
         }
 
-        console.log(`Closed tab ${tabId ? `with ID ${tabId.slice(0, 8)}...` : targetIndex}`)
+        console.log(
+          `Closed tab ${tabId ? `with ID ${tabId.slice(0, 8)}...` : targetIndex}`
+        )
 
         if (argv.json) {
           logger.json({
@@ -254,7 +267,7 @@ export const tabsCommand = createCommand<TabOptions>({
               // Continue searching
             }
           }
-          
+
           if (!targetPage) {
             throw new Error(`Tab with ID ${tabId} not found`)
           }
@@ -272,10 +285,14 @@ export const tabsCommand = createCommand<TabOptions>({
         await targetPage.bringToFront()
 
         if (spinner) {
-          spinner.succeed(`Selected tab ${tabId ? `with ID ${tabId.slice(0, 8)}...` : targetIndex}`)
+          spinner.succeed(
+            `Selected tab ${tabId ? `with ID ${tabId.slice(0, 8)}...` : targetIndex}`
+          )
         }
 
-        logger.success(`Selected tab ${tabId ? `with ID ${tabId.slice(0, 8)}...` : targetIndex}`)
+        logger.success(
+          `Selected tab ${tabId ? `with ID ${tabId.slice(0, 8)}...` : targetIndex}`
+        )
 
         if (argv.json) {
           logger.json({

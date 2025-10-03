@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 
 import {
   generateRef,
+  resetLabelCounter,
   isInteractive,
   findElementByRef,
   nodeToSelector,
@@ -10,37 +11,44 @@ import {
 
 describe('ref-utils', () => {
   describe('generateRef', () => {
-    it('should generate consistent ref for same element', () => {
-      const node = {
-        role: 'button',
-        name: 'Submit',
-        value: '',
-      }
+    beforeEach(() => {
+      // Reset counter before each test for predictable results
+      resetLabelCounter()
+    })
+
+    it('should generate sequential Excel-style refs', () => {
+      const node = { role: 'button', name: 'Submit' }
 
       const ref1 = generateRef(node, 'path1')
       const ref2 = generateRef(node, 'path1')
+      const ref3 = generateRef(node, 'path1')
 
-      expect(ref1).toBe(ref2)
-      expect(ref1).toHaveLength(6)
+      expect(ref1).toBe('A')
+      expect(ref2).toBe('B')
+      expect(ref3).toBe('C')
     })
 
-    it('should generate different refs for different elements', () => {
+    it('should generate different refs for each call', () => {
       const node1 = { role: 'button', name: 'Submit' }
       const node2 = { role: 'button', name: 'Cancel' }
 
       const ref1 = generateRef(node1, 'path')
       const ref2 = generateRef(node2, 'path')
 
-      expect(ref1).not.toBe(ref2)
+      expect(ref1).toBe('A')
+      expect(ref2).toBe('B')
     })
 
-    it('should generate different refs for same element at different paths', () => {
+    it('should continue sequence regardless of element content', () => {
       const node = { role: 'button', name: 'Submit' }
 
       const ref1 = generateRef(node, 'path1')
       const ref2 = generateRef(node, 'path2')
+      const ref3 = generateRef(node, 'path3')
 
-      expect(ref1).not.toBe(ref2)
+      expect(ref1).toBe('A')
+      expect(ref2).toBe('B')
+      expect(ref3).toBe('C')
     })
   })
 
@@ -83,6 +91,10 @@ describe('ref-utils', () => {
   })
 
   describe('findElementByRef', () => {
+    beforeEach(() => {
+      resetLabelCounter()
+    })
+
     it('should find element by ref', () => {
       const tree = {
         role: 'root',
@@ -92,7 +104,12 @@ describe('ref-utils', () => {
         ],
       }
 
-      const targetRef = generateRef(tree.children[1], '-1')
+      // First extract interactive elements to assign refs
+      const elements = extractInteractiveElements(tree)
+      expect(elements).toHaveLength(2)
+
+      // Use the actual ref assigned to the second element
+      const targetRef = elements[1].ref
       const found = findElementByRef(tree, targetRef)
 
       expect(found).toEqual(tree.children[1])
@@ -109,7 +126,12 @@ describe('ref-utils', () => {
         ],
       }
 
-      const targetRef = generateRef(tree.children[0].children[0], '-0-0')
+      // First extract interactive elements to assign refs
+      const elements = extractInteractiveElements(tree)
+      expect(elements).toHaveLength(1)
+
+      // Use the actual ref assigned to the element
+      const targetRef = elements[0].ref
       const found = findElementByRef(tree, targetRef)
 
       expect(found).toEqual(tree.children[0].children[0])
@@ -142,7 +164,9 @@ describe('ref-utils', () => {
     it('should create textbox selector with aria-label', () => {
       const node = { role: 'textbox', name: 'Email' }
       // The function now returns a compound selector for better matching
-      expect(nodeToSelector(node)).toBe('input[placeholder="Email"], input[aria-label="Email"]')
+      expect(nodeToSelector(node)).toBe(
+        'input[placeholder="Email"], input[aria-label="Email"]'
+      )
     })
 
     it('should create textbox selector with value', () => {
@@ -226,6 +250,8 @@ describe('ref-utils', () => {
     })
 
     it('should include ref and description in extracted elements', () => {
+      resetLabelCounter()
+
       const tree = {
         role: 'button',
         name: 'Submit',
@@ -236,7 +262,7 @@ describe('ref-utils', () => {
 
       expect(elements).toHaveLength(1)
       expect(elements[0]).toHaveProperty('ref')
-      expect(elements[0].ref).toHaveLength(6)
+      expect(elements[0].ref).toBe('A')  // Excel-style ref should be 'A'
       expect(elements[0].description).toBe('Submit the form')
     })
 

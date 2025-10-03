@@ -80,7 +80,7 @@ export interface GlobalOptions {
  */
 export function createCli(argv?: string[]) {
   const cli = yargs(argv || hideBin(process.argv))
-    .scriptName('playwright')
+    .scriptName('pw')
     .usage('$0 <command> [options]')
 
     // Global options available to all commands
@@ -190,7 +190,11 @@ export function createCli(argv?: string[]) {
         console.log(chalk.red('Error:'), msg)
         console.log()
         // Show help to stdout as well for test capture
-        console.log(yargs.getHelp())
+        try {
+          console.log(yargs.help())
+        } catch {
+          // Help not available in this context, continue with exit
+        }
       }
       process.exit(1)
     })

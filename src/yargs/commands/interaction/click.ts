@@ -131,7 +131,7 @@ export const clickCommand = createCommand<ClickOptions>({
           ? ` in tab ${tabId.slice(0, 8)}...`
           : ''
 
-    const targetDesc = ref ? `[ref=${ref}]` : selector
+    const targetDesc = ref ? `[${ref}]` : selector
     if (spinner) {
       spinner.text = `${clickType}${modifierText} ${targetDesc}${tabTarget}...`
     }
@@ -161,50 +161,30 @@ export const clickCommand = createCommand<ClickOptions>({
           actualSelector = nodeToSelector(element)
         }
       } else if (selector) {
-        // Check if it's a ref selector pattern [ref=xxx]
-        const refMatch = selector.match(/^\[ref=([a-f0-9]+)\]$/)
-        if (refMatch) {
-          const targetRef = refMatch[1]
+        // Try text-based selector resolution first
+        if (spinner) {
+          spinner.text = `Finding element: "${selector}"...`
+        }
+
+        const textSelectorResult = await findBestSelector(page, selector)
+        if (textSelectorResult) {
+          actualSelector = textSelectorResult.selector
           if (spinner) {
-            spinner.text = `Finding element with ref=${targetRef}...`
-          }
-
-          // Get accessibility snapshot
-          const snapshot = await page.accessibility.snapshot()
-
-          // Find the element with this ref
-          const element = findElementByRef(snapshot, targetRef)
-
-          if (!element) {
-            throw new Error(`No element found with ref=${targetRef}`)
-          }
-
-          // Convert to a selector
-          actualSelector = nodeToSelector(element)
-          if (spinner) {
-            spinner.text = `${clickType}${modifierText} ${element.role} "${element.name || ''}"...`
+            spinner.text = `Found via ${textSelectorResult.strategy}: ${selector}...`
           }
         } else {
-          // Try text-based selector resolution first
-          if (spinner) {
-            spinner.text = `Finding element: "${selector}"...`
+          // If not a CSS selector and no element found by text, throw clear error
+          const isCss =
+            /^[#.]/.test(selector) ||
+            /[.\[\]\>\+\~:]/.test(selector) ||
+            /^[a-z]+$/i.test(selector)
+          if (!isCss) {
+            throw new Error(
+              `Element not found by text: "${selector}". Try using a CSS selector or check the page content with 'snapshot'.`
+            )
           }
-          
-          const textSelectorResult = await findBestSelector(page, selector)
-          if (textSelectorResult) {
-            actualSelector = textSelectorResult.selector
-            if (spinner) {
-              spinner.text = `Found via ${textSelectorResult.strategy}: ${selector}...`
-            }
-          } else {
-            // If not a CSS selector and no element found by text, throw clear error
-            const isCss = /^[#.]/.test(selector) || /[.\[\]\>\+\~:]/.test(selector) || /^[a-z]+$/i.test(selector)
-            if (!isCss) {
-              throw new Error(`Element not found by text: "${selector}". Try using a CSS selector or check the page content with 'snapshot'.`)
-            }
-            // Fallback to using selector as-is (CSS selector)
-            actualSelector = selector
-          }
+          // Fallback to using selector as-is (CSS selector)
+          actualSelector = selector
         }
       } else {
         // This shouldn't happen due to validation above
@@ -223,18 +203,27 @@ export const clickCommand = createCommand<ClickOptions>({
         await page.dblclick(actualSelector, clickOptions)
       } else {
         // Wait for element to exist first (fail fast if not found)
+        // Use a shorter timeout than the test timeout to ensure proper error reporting
+        const waitTimeout = Math.min(timeout || 5000, 1500)
 
-        await page.waitForSelector(actualSelector, {
-          timeout: Math.min(timeout || 5000, 2000),
-        })
+        try {
+          await page.waitForSelector(actualSelector, {
+            timeout: waitTimeout,
+          })
+        } catch (error: any) {
+          if (error.message?.includes('Timeout')) {
+            throw new Error(`Element not found: ${actualSelector}`)
+          }
+          throw error
+        }
 
         await page.click(actualSelector, clickOptions)
-        
+
         // Track the click action
         actionHistory.addAction({
           type: 'click',
           target: actualSelector,
-          tabId: tabId
+          tabId: tabId,
         })
       }
     })

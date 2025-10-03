@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { execSync } from 'child_process'
-
+import { TEST_PORT } from '../../../../test-utils/test-constants'
 /**
  * Simplified Type Command Tests - TAB ID FROM COMMAND OUTPUT
  *
@@ -22,7 +22,7 @@ describe('type command - TAB ID FROM OUTPUT', () => {
       const output = execSync(cmd, {
         encoding: 'utf8',
         timeout,
-        env: { ...process.env },
+        env: { ...process.env, NODE_ENV: undefined },
         stdio: 'pipe',
       })
       return { output, exitCode: 0 }
@@ -47,7 +47,7 @@ describe('type command - TAB ID FROM OUTPUT', () => {
     // Browser already running from global setup
     // Create a dedicated test tab for this test suite and capture its ID
     const { output } = runCommand(
-      `${CLI} tabs new --url "data:text/html,<div id='test-container'>Type Test Suite Ready</div>"`
+      `${CLI} tabs new --url "data:text/html,<div id='test-container'>Type Test Suite Ready</div>" --port ${TEST_PORT}`
     )
     testTabId = extractTabId(output)
     console.log(`Type test suite using tab ID: ${testTabId}`)
@@ -58,7 +58,7 @@ describe('type command - TAB ID FROM OUTPUT', () => {
     if (testTabId) {
       try {
         // First check if tab still exists
-        const { output } = runCommand(`${CLI} tabs list --json`)
+        const { output } = runCommand(`${CLI} tabs list --json --port ${TEST_PORT}`)
         const data = JSON.parse(output)
         const tabExists = data.tabs.some((tab: any) => tab.id === testTabId)
 
@@ -67,7 +67,7 @@ describe('type command - TAB ID FROM OUTPUT', () => {
           const tabIndex = data.tabs.findIndex(
             (tab: any) => tab.id === testTabId
           )
-          runCommand(`${CLI} tabs close --index ${tabIndex}`)
+          runCommand(`${CLI} tabs close --index ${tabIndex} --port ${TEST_PORT}`)
           console.log(`Closed test tab ${testTabId}`)
         }
       } catch (error) {
@@ -90,12 +90,12 @@ describe('type command - TAB ID FROM OUTPUT', () => {
     it('should type text using captured tab ID', () => {
       // Navigate our test tab to a page with input field
       runCommand(
-        `${CLI} navigate "data:text/html,<input id='test-input' placeholder='Type here'/>" --tab-id ${testTabId}`
+        `${CLI} navigate "data:text/html,<input id='test-input' placeholder='Type here'/>" --tab-id ${testTabId} --port ${TEST_PORT}`
       )
 
       // Type text into the input field using our captured tab ID
       const { exitCode } = runCommand(
-        `${CLI} type "#test-input" "Hello World" --tab-id ${testTabId}`
+        `${CLI} type "#test-input" "Hello World" --tab-id ${testTabId} --port ${TEST_PORT}`
       )
       expect(exitCode).toBe(0)
     })
@@ -103,18 +103,18 @@ describe('type command - TAB ID FROM OUTPUT', () => {
     it('should handle different input types in same tab', () => {
       // Navigate to page with various input types
       runCommand(
-        `${CLI} navigate "data:text/html,<form><input id='text-input' type='text'/><textarea id='textarea'>Default text</textarea></form>" --tab-id ${testTabId}`
+        `${CLI} navigate "data:text/html,<form><input id='text-input' type='text'/><textarea id='textarea'>Default text</textarea></form>" --tab-id ${testTabId} --port ${TEST_PORT}`
       )
 
       // Type into different elements in the same tab
       expect(
         runCommand(
-          `${CLI} type "#text-input" "Text input value" --tab-id ${testTabId}`
+          `${CLI} type "#text-input" "Text input value" --tab-id ${testTabId} --port ${TEST_PORT}`
         ).exitCode
       ).toBe(0)
       expect(
         runCommand(
-          `${CLI} type "#textarea" "Textarea content" --tab-id ${testTabId}`
+          `${CLI} type "#textarea" "Textarea content" --tab-id ${testTabId} --port ${TEST_PORT}`
         ).exitCode
       ).toBe(0)
     })
@@ -122,12 +122,12 @@ describe('type command - TAB ID FROM OUTPUT', () => {
     it('should type with clear option', () => {
       // Navigate to page with pre-filled input
       runCommand(
-        `${CLI} navigate "data:text/html,<input id='test-input' value='existing text'/>" --tab-id ${testTabId}`
+        `${CLI} navigate "data:text/html,<input id='test-input' value='existing text'/>" --tab-id ${testTabId} --port ${TEST_PORT}`
       )
 
       // Type with clear option
       const { exitCode } = runCommand(
-        `${CLI} type "#test-input" "new text" --clear --tab-id ${testTabId}`
+        `${CLI} type "#test-input" "new text" --clear --tab-id ${testTabId} --port ${TEST_PORT}`
       )
       expect(exitCode).toBe(0)
     })
@@ -135,13 +135,13 @@ describe('type command - TAB ID FROM OUTPUT', () => {
     it('should handle non-existent element gracefully', () => {
       // Navigate to page without target element
       runCommand(
-        `${CLI} navigate "data:text/html,<div>No input field here</div>" --tab-id ${testTabId}`
+        `${CLI} navigate "data:text/html,<div>No input field here</div>" --tab-id ${testTabId} --port ${TEST_PORT}`
       )
 
       // Try to type into non-existent element - command hangs on non-existent selectors
       expect(() => {
         runCommand(
-          `${CLI} type "#nonexistent" "text" --tab-id ${testTabId}`,
+          `${CLI} type "#nonexistent" "text" --tab-id ${testTabId} --port ${TEST_PORT}`,
           2000
         )
       }).toThrow('Command timed out (hanging)')
@@ -149,8 +149,8 @@ describe('type command - TAB ID FROM OUTPUT', () => {
 
     it('should handle invalid tab ID', () => {
       const { output, exitCode } = runCommand(
-        `${CLI} type "#test" "text" --tab-id "INVALID_ID"`,
-        2000
+        `${CLI} type "#test" "text" --tab-id "INVALID_ID" --port ${TEST_PORT}`,
+        10000
       )
       expect(exitCode).toBe(1)
       expect(output).toMatch(/not found/i)
@@ -158,7 +158,7 @@ describe('type command - TAB ID FROM OUTPUT', () => {
 
     it('should prevent conflicting tab arguments', () => {
       const { output, exitCode } = runCommand(
-        `${CLI} type "#test" "text" --tab-index 0 --tab-id ${testTabId}`,
+        `${CLI} type "#test" "text" --tab-index 0 --tab-id ${testTabId} --port ${TEST_PORT}`,
         2000
       )
       expect(exitCode).toBe(1)

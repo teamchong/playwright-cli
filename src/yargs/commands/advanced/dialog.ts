@@ -51,18 +51,15 @@ export const dialogCommand = createCommand<DialogOptions>({
 
       const page = await BrowserHelper.getActivePage(argv.port)
       if (!page) {
-        throw new Error('No active page. Use "playwright open" first')
+        logger.error('No active page. Use "pw open" first')
+        throw new Error('No active page')
       }
 
       logger.warn('⏳ Waiting for dialog...')
 
       // Set up a promise to wait for dialog
       const dialogPromise = new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error('No dialog appeared within 2000ms'))
-        }, 2000)
-
-        page.once('dialog', async dialog => {
+        const dialogHandler = async (dialog: any) => {
           clearTimeout(timeout)
 
           logger.info(`📢 Dialog detected: ${dialog.type()}`)
@@ -88,13 +85,23 @@ export const dialogCommand = createCommand<DialogOptions>({
           } catch (err) {
             reject(err)
           }
-        })
+        }
+
+        const timeout = setTimeout(() => {
+          // Remove the event listener when timeout occurs
+          page.off('dialog', dialogHandler)
+          reject(new Error('No dialog appeared within 1000ms'))
+        }, 1000)
+
+        page.once('dialog', dialogHandler)
       })
 
       await dialogPromise
     } catch (error: any) {
       cmdContext.logger.error(`Failed to handle dialog: ${error.message}`)
-      throw new Error('Command failed')
+      // Set proper exit code and throw to ensure command fails
+      process.exitCode = 1
+      throw error
     }
   },
 })

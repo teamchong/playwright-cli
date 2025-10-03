@@ -19,7 +19,7 @@ describe('session command - REAL TESTS', () => {
       const output = execSync(cmd, {
         encoding: 'utf8',
         timeout,
-        env: { ...process.env },
+        env: { ...process.env, NODE_ENV: undefined },
       })
       return { output, exitCode: 0 }
     } catch (error: any) {
@@ -66,7 +66,8 @@ describe('session command - REAL TESTS', () => {
 
     it('should handle save without browser', () => {
       const { output, exitCode } = runCommand(
-        `${CLI} session save test-session`
+        `${CLI} session save test-session`,
+        10000 // Increased timeout for full suite runs
       )
       // May fail if no browser running, but should provide informative error
       if (exitCode === 0) {

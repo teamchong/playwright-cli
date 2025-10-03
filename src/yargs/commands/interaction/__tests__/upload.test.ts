@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { execSync } from 'child_process'
 import * as fs from 'fs'
 import * as path from 'path'
-
+import { TEST_PORT } from '../../../../test-utils/test-constants'
 /**
  * Simplified Upload Command Tests - TAB ID FROM COMMAND OUTPUT
  *
@@ -26,7 +26,7 @@ describe('upload command - TAB ID FROM OUTPUT', () => {
       const output = execSync(cmd, {
         encoding: 'utf8',
         timeout,
-        env: { ...process.env },
+        env: { ...process.env, NODE_ENV: undefined },
         stdio: 'pipe',
       })
       return { output, exitCode: 0 }
@@ -57,7 +57,7 @@ describe('upload command - TAB ID FROM OUTPUT', () => {
     // Browser already running from global setup
     // Create a dedicated test tab for this test suite and capture its ID
     const { output } = runCommand(
-      `${CLI} tabs new --url "data:text/html,<div id='test-container'>Upload Test Suite Ready</div>"`
+      `${CLI} tabs new --url "data:text/html,<div id='test-container'>Upload Test Suite Ready</div>" --port ${TEST_PORT}`
     )
     testTabId = extractTabId(output)
     console.log(`Upload test suite using tab ID: ${testTabId}`)
@@ -74,7 +74,7 @@ describe('upload command - TAB ID FROM OUTPUT', () => {
     if (testTabId) {
       try {
         // First check if tab still exists
-        const { output } = runCommand(`${CLI} tabs list --json`)
+        const { output } = runCommand(`${CLI} tabs list --json --port ${TEST_PORT}`)
         const data = JSON.parse(output)
         const tabExists = data.tabs.some((tab: any) => tab.id === testTabId)
 
@@ -83,7 +83,7 @@ describe('upload command - TAB ID FROM OUTPUT', () => {
           const tabIndex = data.tabs.findIndex(
             (tab: any) => tab.id === testTabId
           )
-          runCommand(`${CLI} tabs close --index ${tabIndex}`)
+          runCommand(`${CLI} tabs close --index ${tabIndex} --port ${TEST_PORT}`)
           console.log(`Closed test tab ${testTabId}`)
         }
       } catch (error) {
@@ -106,12 +106,12 @@ describe('upload command - TAB ID FROM OUTPUT', () => {
     it('should upload single file using captured tab ID', () => {
       // Navigate our test tab to a page with file input
       runCommand(
-        `${CLI} navigate "data:text/html,<input type='file' id='file-input'/>" --tab-id ${testTabId}`
+        `${CLI} navigate "data:text/html,<input type='file' id='file-input'/>" --tab-id ${testTabId} --port ${TEST_PORT}`
       )
 
       // Upload file using our captured tab ID
       const { exitCode } = runCommand(
-        `${CLI} upload "#file-input" "${testFile1}" --tab-id ${testTabId}`
+        `${CLI} upload "#file-input" "${testFile1}" --tab-id ${testTabId} --port ${TEST_PORT}`
       )
       expect(exitCode).toBe(0)
     })
@@ -119,12 +119,12 @@ describe('upload command - TAB ID FROM OUTPUT', () => {
     it('should upload multiple files', () => {
       // Navigate to page with multiple file input
       runCommand(
-        `${CLI} navigate "data:text/html,<input type='file' id='multi-file' multiple/>" --tab-id ${testTabId}`
+        `${CLI} navigate "data:text/html,<input type='file' id='multi-file' multiple/>" --tab-id ${testTabId} --port ${TEST_PORT}`
       )
 
       // Upload multiple files in the same tab
       const { exitCode } = runCommand(
-        `${CLI} upload "#multi-file" "${testFile1}" "${testFile2}" --tab-id ${testTabId}`
+        `${CLI} upload "#multi-file" "${testFile1}" "${testFile2}" --tab-id ${testTabId} --port ${TEST_PORT}`
       )
       expect(exitCode).toBe(0)
     })
@@ -132,18 +132,18 @@ describe('upload command - TAB ID FROM OUTPUT', () => {
     it('should work with different file inputs', () => {
       // Navigate to page with multiple file inputs
       runCommand(
-        `${CLI} navigate "data:text/html,<input type='file' id='doc-upload'/><input type='file' id='image-upload'/>" --tab-id ${testTabId}`
+        `${CLI} navigate "data:text/html,<input type='file' id='doc-upload'/><input type='file' id='image-upload'/>" --tab-id ${testTabId} --port ${TEST_PORT}`
       )
 
       // Upload to different inputs in the same tab
       expect(
         runCommand(
-          `${CLI} upload "#doc-upload" "${testFile1}" --tab-id ${testTabId}`
+          `${CLI} upload "#doc-upload" "${testFile1}" --tab-id ${testTabId} --port ${TEST_PORT}`
         ).exitCode
       ).toBe(0)
       expect(
         runCommand(
-          `${CLI} upload "#image-upload" "${testFile2}" --tab-id ${testTabId}`
+          `${CLI} upload "#image-upload" "${testFile2}" --tab-id ${testTabId} --port ${TEST_PORT}`
         ).exitCode
       ).toBe(0)
     })
@@ -151,13 +151,13 @@ describe('upload command - TAB ID FROM OUTPUT', () => {
     it('should handle non-existent element gracefully', () => {
       // Navigate to page without file input
       runCommand(
-        `${CLI} navigate "data:text/html,<div>No file input here</div>" --tab-id ${testTabId}`
+        `${CLI} navigate "data:text/html,<div>No file input here</div>" --tab-id ${testTabId} --port ${TEST_PORT}`
       )
 
       // Try to upload to non-existent element - command hangs on non-existent selectors
       expect(() => {
         runCommand(
-          `${CLI} upload "#nonexistent" "${testFile1}" --tab-id ${testTabId}`,
+          `${CLI} upload "#nonexistent" "${testFile1}" --tab-id ${testTabId} --port ${TEST_PORT}`,
           2000
         )
       }).toThrow('Command timed out (hanging)')
@@ -165,8 +165,8 @@ describe('upload command - TAB ID FROM OUTPUT', () => {
 
     it('should handle invalid tab ID', () => {
       const { output, exitCode } = runCommand(
-        `${CLI} upload "#test" "${testFile1}" --tab-id "INVALID_ID"`,
-        2000
+        `${CLI} upload "#test" "${testFile1}" --tab-id "INVALID_ID" --port ${TEST_PORT}`,
+        10000
       )
       expect(exitCode).toBe(1)
       expect(output).toMatch(/not found/i)
@@ -174,7 +174,7 @@ describe('upload command - TAB ID FROM OUTPUT', () => {
 
     it('should prevent conflicting tab arguments', () => {
       const { output, exitCode } = runCommand(
-        `${CLI} upload "#test" "${testFile1}" --tab-index 0 --tab-id ${testTabId}`,
+        `${CLI} upload "#test" "${testFile1}" --tab-index 0 --tab-id ${testTabId} --port ${TEST_PORT}`,
         2000
       )
       expect(exitCode).toBe(1)

@@ -362,6 +362,8 @@ npm run test:watch # Watch mode
 npm run test:ui    # Interactive UI
 ```
 
+**Note:** Tests run with a visible browser window (not headless) due to limitations with Playwright's CDP connection to headless Chrome. This is a known issue where `connectOverCDP` doesn't work reliably with externally-launched headless Chrome instances.
+
 ## License
 
 MIT

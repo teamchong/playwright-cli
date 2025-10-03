@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { execSync } from 'child_process'
-
+import { TEST_PORT } from '../../../../test-utils/test-constants'
 /**
  * Navigate Command Tests - TAB ID FROM COMMAND OUTPUT
  *
@@ -22,7 +22,7 @@ describe('navigate command - TAB ID FROM OUTPUT', () => {
       const output = execSync(cmd, {
         encoding: 'utf8',
         timeout,
-        env: { ...process.env },
+        env: { ...process.env, NODE_ENV: undefined },
         stdio: 'pipe',
       })
       return { output, exitCode: 0 }
@@ -47,7 +47,7 @@ describe('navigate command - TAB ID FROM OUTPUT', () => {
     // Browser already running from global setup
     // Create a dedicated test tab for this test suite and capture its ID
     const { output } = runCommand(
-      `${CLI} tabs new --url "data:text/html,<div id='test-container'>Navigate Test Suite Ready</div>"`
+      `${CLI} tabs new --url "data:text/html,<div id='test-container'>Navigate Test Suite Ready</div>" --port ${TEST_PORT}`
     )
     testTabId = extractTabId(output)
     console.log(`Navigate test suite using tab ID: ${testTabId}`)
@@ -58,7 +58,7 @@ describe('navigate command - TAB ID FROM OUTPUT', () => {
     if (testTabId) {
       try {
         // First check if tab still exists
-        const { output } = runCommand(`${CLI} tabs list --json`)
+        const { output } = runCommand(`${CLI} tabs list --json --port ${TEST_PORT}`)
         const data = JSON.parse(output)
         const tabExists = data.tabs.some((tab: any) => tab.id === testTabId)
 
@@ -67,7 +67,7 @@ describe('navigate command - TAB ID FROM OUTPUT', () => {
           const tabIndex = data.tabs.findIndex(
             (tab: any) => tab.id === testTabId
           )
-          runCommand(`${CLI} tabs close --index ${tabIndex}`)
+          runCommand(`${CLI} tabs close --index ${tabIndex} --port ${TEST_PORT}`)
           console.log(`Closed test tab ${testTabId}`)
         }
       } catch (error) {
@@ -88,14 +88,14 @@ describe('navigate command - TAB ID FROM OUTPUT', () => {
 
   describe('argument validation', () => {
     it('should require URL argument', () => {
-      const result = runCommand(`${CLI} navigate`)
+      const result = runCommand(`${CLI} navigate --port ${TEST_PORT}`)
       expect(result.exitCode).toBe(1)
       expect(result.output.length).toBeGreaterThan(0)
     })
 
     it('should validate URL format', () => {
       const result = runCommand(
-        `${CLI} navigate invalid-url --tab-id ${testTabId}`
+        `${CLI} navigate invalid-url --tab-id ${testTabId} --port ${TEST_PORT}`
       )
       expect(result.exitCode).toBe(1)
       expect(result.output).toMatch(/Invalid URL|URL/)
@@ -105,7 +105,7 @@ describe('navigate command - TAB ID FROM OUTPUT', () => {
   describe('direct tab targeting with captured ID', () => {
     it('should navigate to valid URL using captured tab ID', () => {
       const result = runCommand(
-        `${CLI} navigate "data:text/html,<h1>Navigation Test</h1>" --tab-id ${testTabId}`
+        `${CLI} navigate "data:text/html,<h1>Navigation Test</h1>" --tab-id ${testTabId} --port ${TEST_PORT}`
       )
       expect(result.exitCode).toBe(0)
       expect(result.output).toContain('Successfully navigated')
@@ -113,7 +113,7 @@ describe('navigate command - TAB ID FROM OUTPUT', () => {
 
     it('should handle navigation timeout with tab ID', () => {
       const result = runCommand(
-        `${CLI} navigate "data:text/html,<h1>Timeout Test</h1>" --timeout 5000 --tab-id ${testTabId}`
+        `${CLI} navigate "data:text/html,<h1>Timeout Test</h1>" --timeout 5000 --tab-id ${testTabId} --port ${TEST_PORT}`
       )
       expect(result.exitCode).toBe(0)
       expect(result.output).toContain('Successfully navigated')
@@ -121,7 +121,7 @@ describe('navigate command - TAB ID FROM OUTPUT', () => {
 
     it('should handle wait-until option with tab ID', () => {
       const result = runCommand(
-        `${CLI} navigate "data:text/html,<h1>Wait Until Test</h1>" --wait-until load --tab-id ${testTabId}`
+        `${CLI} navigate "data:text/html,<h1>Wait Until Test</h1>" --wait-until load --tab-id ${testTabId} --port ${TEST_PORT}`
       )
       expect(result.exitCode).toBe(0)
       expect(result.output).toContain('Successfully navigated')
@@ -129,8 +129,8 @@ describe('navigate command - TAB ID FROM OUTPUT', () => {
 
     it('should handle invalid tab ID', () => {
       const { output, exitCode } = runCommand(
-        `${CLI} navigate "data:text/html,<h1>Test</h1>" --tab-id "INVALID_ID"`,
-        2000
+        `${CLI} navigate "data:text/html,<h1>Test</h1>" --tab-id "INVALID_ID" --port ${TEST_PORT}`,
+        10000
       )
       expect(exitCode).toBe(1)
       expect(output).toMatch(/not found/i)
@@ -138,7 +138,7 @@ describe('navigate command - TAB ID FROM OUTPUT', () => {
 
     it('should prevent conflicting tab arguments', () => {
       const { output, exitCode } = runCommand(
-        `${CLI} navigate "data:text/html,<h1>Test</h1>" --tab-index 0 --tab-id ${testTabId}`,
+        `${CLI} navigate "data:text/html,<h1>Test</h1>" --tab-index 0 --tab-id ${testTabId} --port ${TEST_PORT}`,
         2000
       )
       expect(exitCode).toBe(1)

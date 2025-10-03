@@ -6,8 +6,9 @@
 
 import { execSync } from 'child_process'
 import { TabManager } from './tab-manager'
+import { TEST_PORT } from './test-constants'
 
-export default function setup() {
+export default async function setup() {
   console.log('🚀 Setting up browser for all tests...')
 
   try {
@@ -26,9 +27,14 @@ export default function setup() {
     }
 
     // Launch browser session for local development
-    console.log('🌐 Starting browser session...')
+    console.log('🌐 Starting browser session in headless mode...')
+
+    // Set environment variable for headless mode
+    process.env.PLAYWRIGHT_CLI_HEADLESS = 'true'
+
+    // USE A DIFFERENT PORT FOR TESTS TO AVOID CONFLICTS WITH USER'S BROWSER
     const { output, exitCode } = TabManager.runCommand(
-      'node dist/src/index.js open',
+      `PLAYWRIGHT_CLI_HEADLESS=true node dist/src/index.js open --port ${TEST_PORT}`,
       10000
     )
 
@@ -38,8 +44,27 @@ export default function setup() {
 
     console.log('✅ Browser session ready')
 
+    // Clean up any accumulated test tabs from previous runs
+    console.log('🧹 Cleaning up any leftover test tabs...')
+    TabManager.cleanupTestTabs()
+
     // Clear any existing tab tracking
     TabManager.clearTracking()
+
+    // IMPORTANT: Create a persistent anchor tab to keep browser alive
+    // Without this, closing the last test tab will exit Chrome
+    console.log('📌 Creating persistent anchor tab to keep browser alive...')
+    const { output: anchorOutput } = TabManager.runCommand(
+      `node dist/src/index.js tabs new --port ${TEST_PORT} --url "about:blank"`,
+      10000
+    )
+    const anchorMatch = anchorOutput.match(/Tab ID: ([A-F0-9]+)/)
+    if (anchorMatch) {
+      const anchorTabId = anchorMatch[1]
+      console.log(`📌 Anchor tab created: ${anchorTabId}`)
+      // Mark as persistent so tests don't accidentally close it
+      process.env.ANCHOR_TAB_ID = anchorTabId
+    }
   } catch (error) {
     console.error('❌ Global setup failed:', error)
     throw error

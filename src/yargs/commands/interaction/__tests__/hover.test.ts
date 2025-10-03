@@ -8,7 +8,7 @@ import {
   afterEach,
 } from 'vitest'
 import { execSync } from 'child_process'
-
+import { TEST_PORT } from '../../../../test-utils/test-constants'
 /**
  * Simplified Hover Command Tests - TAB ID FROM COMMAND OUTPUT
  *
@@ -30,7 +30,7 @@ describe('hover command - TAB ID FROM OUTPUT', () => {
       const output = execSync(cmd, {
         encoding: 'utf8',
         timeout,
-        env: { ...process.env },
+        env: { ...process.env, NODE_ENV: undefined },
         stdio: 'pipe',
       })
       return { output, exitCode: 0 }
@@ -55,7 +55,7 @@ describe('hover command - TAB ID FROM OUTPUT', () => {
     // Browser already running from global setup
     // Create a dedicated test tab for this test suite and capture its ID
     const { output } = runCommand(
-      `${CLI} tabs new --url "data:text/html,<div id='test-container'>Hover Test Suite Ready</div>"`
+      `${CLI} tabs new --url "data:text/html,<div id='test-container'>Hover Test Suite Ready</div>" --port ${TEST_PORT}`
     )
     testTabId = extractTabId(output)
     console.log(`Hover test suite using tab ID: ${testTabId}`)
@@ -66,7 +66,7 @@ describe('hover command - TAB ID FROM OUTPUT', () => {
     if (testTabId) {
       try {
         // First check if tab still exists
-        const { output } = runCommand(`${CLI} tabs list --json`)
+        const { output } = runCommand(`${CLI} tabs list --json --port ${TEST_PORT}`)
         const data = JSON.parse(output)
         const tabExists = data.tabs.some((tab: any) => tab.id === testTabId)
 
@@ -75,7 +75,7 @@ describe('hover command - TAB ID FROM OUTPUT', () => {
           const tabIndex = data.tabs.findIndex(
             (tab: any) => tab.id === testTabId
           )
-          runCommand(`${CLI} tabs close --index ${tabIndex}`)
+          runCommand(`${CLI} tabs close --index ${tabIndex} --port ${TEST_PORT}`)
           console.log(`Closed test tab ${testTabId}`)
         }
       } catch (error) {
@@ -98,12 +98,12 @@ describe('hover command - TAB ID FROM OUTPUT', () => {
     it('should hover element using captured tab ID', () => {
       // Navigate our test tab to a page with a hoverable element
       runCommand(
-        `${CLI} navigate "data:text/html,<div id='test-div' style='width:100px;height:100px;background:red'>Hover Me</div>" --tab-id ${testTabId}`
+        `${CLI} navigate "data:text/html,<div id='test-div' style='width:100px;height:100px;background:red'>Hover Me</div>" --tab-id ${testTabId} --port ${TEST_PORT}`
       )
 
       // Hover the element directly using our captured tab ID
       const { exitCode } = runCommand(
-        `${CLI} hover "#test-div" --tab-id ${testTabId}`
+        `${CLI} hover "#test-div" --tab-id ${testTabId} --port ${TEST_PORT}`
       )
       expect(exitCode).toBe(0)
     })
@@ -111,34 +111,34 @@ describe('hover command - TAB ID FROM OUTPUT', () => {
     it('should handle non-existent element gracefully', () => {
       // Navigate to page without target element
       runCommand(
-        `${CLI} navigate "data:text/html,<div>No hover target here</div>" --tab-id ${testTabId}`
+        `${CLI} navigate "data:text/html,<div>No hover target here</div>" --tab-id ${testTabId} --port ${TEST_PORT}`
       )
 
       // Try to hover non-existent element - command hangs on non-existent selectors
       expect(() => {
-        runCommand(`${CLI} hover "#nonexistent" --tab-id ${testTabId}`, 2000)
+        runCommand(`${CLI} hover "#nonexistent" --tab-id ${testTabId} --port ${TEST_PORT}`, 2000)
       }).toThrow('Command timed out (hanging)')
     })
 
     it('should work with different element types', () => {
       // Navigate to page with various hoverable elements
       runCommand(
-        `${CLI} navigate "data:text/html,<button id='hover-btn'>Button</button><span id='hover-span'>Span</span>" --tab-id ${testTabId}`
+        `${CLI} navigate "data:text/html,<button id='hover-btn'>Button</button><span id='hover-span'>Span</span>" --tab-id ${testTabId} --port ${TEST_PORT}`
       )
 
       // Hover different elements in the same tab
       expect(
-        runCommand(`${CLI} hover "#hover-btn" --tab-id ${testTabId}`).exitCode
+        runCommand(`${CLI} hover "#hover-btn" --tab-id ${testTabId} --port ${TEST_PORT}`).exitCode
       ).toBe(0)
       expect(
-        runCommand(`${CLI} hover "#hover-span" --tab-id ${testTabId}`).exitCode
+        runCommand(`${CLI} hover "#hover-span" --tab-id ${testTabId} --port ${TEST_PORT}`).exitCode
       ).toBe(0)
     })
 
     it('should handle invalid tab ID', () => {
       const { output, exitCode } = runCommand(
-        `${CLI} hover "#test" --tab-id "INVALID_ID"`,
-        2000
+        `${CLI} hover "#test" --tab-id "INVALID_ID" --port ${TEST_PORT}`,
+        10000
       )
       expect(exitCode).toBe(1)
       expect(output).toMatch(/not found/i)
@@ -146,7 +146,7 @@ describe('hover command - TAB ID FROM OUTPUT', () => {
 
     it('should prevent conflicting tab arguments', () => {
       const { output, exitCode } = runCommand(
-        `${CLI} hover "#test" --tab-index 0 --tab-id ${testTabId}`,
+        `${CLI} hover "#test" --tab-index 0 --tab-id ${testTabId} --port ${TEST_PORT}`,
         2000
       )
       expect(exitCode).toBe(1)

@@ -62,11 +62,12 @@ export const evalCommand = createCommand<EvalOptions>({
   },
 
   handler: async context => {
-    try {
-      const { argv, logger } = context
-      const tabIndex = argv['tab-index'] as number | undefined
-      const tabId = argv['tab-id'] as string | undefined
+    const { argv, logger } = context
+    const tabIndex = argv['tab-index'] as number | undefined
+    const tabId = argv['tab-id'] as string | undefined
+    const isQuiet = argv.quiet as boolean
 
+    try {
       await BrowserHelper.withTargetPage(
         argv.port,
         tabIndex,
@@ -77,14 +78,21 @@ export const evalCommand = createCommand<EvalOptions>({
 
           // Format output based on options
           if (argv.json) {
-            logger.info(JSON.stringify(result, null, 2))
+            // JSON mode - always output to stdout (not logger)
+            console.log(JSON.stringify(result, null, 2))
+          } else if (isQuiet) {
+            // Quiet mode - only output the result value
+            console.log(String(result))
           } else {
+            // Normal mode - use logger
             logger.info(String(result))
           }
         }
       )
     } catch (error: any) {
-      logger.commandError(`Evaluation failed: ${error.message}`)
+      if (!isQuiet) {
+        logger.error(`Evaluation failed: ${error.message}`)
+      }
       throw new Error('Command failed')
     }
   },

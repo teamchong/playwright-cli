@@ -44,7 +44,7 @@ fi
 echo "✅ Build complete"
 
 # Check if binary was built successfully
-if [ ! -f "$SCRIPT_DIR/playwright" ]; then
+if [ ! -f "$SCRIPT_DIR/pw" ]; then
     echo "❌ Build failed - binary not found"
     exit 1
 fi
@@ -53,10 +53,14 @@ fi
 mkdir -p "$INSTALL_DIR"
 mkdir -p "$CLAUDE_DIR"
 
-# Install binary
+# Create wrapper script that references project directory
 echo "📦 Installing to $INSTALL_DIR..."
-cp playwright "$INSTALL_DIR/"
-chmod +x "$INSTALL_DIR/playwright"
+cat > "$INSTALL_DIR/pw" << EOF
+#!/usr/bin/env bash
+exec node "$SCRIPT_DIR/dist/src/index.js" "\$@"
+EOF
+chmod +x "$INSTALL_DIR/pw"
+echo "✅ Installed pw wrapper script"
 
 # Update CLAUDE.md with Playwright CLI instructions
 echo ""
@@ -96,7 +100,7 @@ if [ -f "$CLAUDE_MD" ]; then
     else
         # Fallback minimal content if file not found
         echo "## Playwright CLI" >> "$CLAUDE_MD.tmp"
-        echo "Browser automation tool. Run 'playwright claude' for documentation." >> "$CLAUDE_MD.tmp"
+        echo "Browser automation tool. Run 'pw --help' for documentation." >> "$CLAUDE_MD.tmp"
     fi
     
     echo "<!-- END PLAYWRIGHT-CLI -->" >> "$CLAUDE_MD.tmp"
@@ -115,7 +119,7 @@ else
     else
         # Fallback minimal content if file not found
         echo "## Playwright CLI" >> "$CLAUDE_MD"
-        echo "Browser automation tool. Run 'playwright claude' for documentation." >> "$CLAUDE_MD"
+        echo "Browser automation tool. Run 'pw --help' for documentation." >> "$CLAUDE_MD"
     fi
     
     echo "<!-- END PLAYWRIGHT-CLI -->" >> "$CLAUDE_MD"
@@ -134,4 +138,4 @@ fi
 echo ""
 echo "✅ Installation complete!"
 echo ""
-echo "Run 'playwright' to see all available commands"
+echo "Run 'pw' to see all available commands"

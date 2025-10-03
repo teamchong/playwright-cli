@@ -19,22 +19,22 @@ CLAUDE_MD="$CLAUDE_DIR/CLAUDE.md"
 remove_binary() {
     local dir="$1"
     local use_sudo="$2"
-    
-    if [ -f "$dir/playwright" ]; then
-        echo "📋 Removing playwright from $dir..."
+
+    if [ -f "$dir/pw" ]; then
+        echo "📋 Removing pw from $dir..."
         if [ "$use_sudo" = "true" ]; then
-            sudo rm -f "$dir/playwright"
+            sudo rm -f "$dir/pw"
         else
-            rm -f "$dir/playwright"
+            rm -f "$dir/pw"
         fi
         echo "✅ Removed from $dir"
     fi
 }
 
 # Stop any running instances
-if pgrep -f "playwright" > /dev/null 2>&1; then
-    echo "🛑 Stopping running playwright instances..."
-    pkill -f "playwright" 2>/dev/null || true
+if pgrep -f "pw" > /dev/null 2>&1; then
+    echo "🛑 Stopping running pw instances..."
+    pkill -f "pw" 2>/dev/null || true
     sleep 1
     echo "✅ Stopped running instances"
 fi
@@ -43,13 +43,13 @@ fi
 remove_binary "$USER_BIN" false
 
 # Remove from system directory (requires sudo)
-if [ -f "$SYSTEM_BIN/playwright" ]; then
-    echo "📋 Removing playwright from $SYSTEM_BIN (requires sudo)..."
-    if sudo rm -f "$SYSTEM_BIN/playwright" 2>/dev/null; then
+if [ -f "$SYSTEM_BIN/pw" ]; then
+    echo "📋 Removing pw from $SYSTEM_BIN (requires sudo)..."
+    if sudo rm -f "$SYSTEM_BIN/pw" 2>/dev/null; then
         echo "✅ Removed from $SYSTEM_BIN"
     else
         echo "⚠️  Could not remove from $SYSTEM_BIN (permission denied)"
-        echo "   You may need to run: sudo rm -f $SYSTEM_BIN/playwright"
+        echo "   You may need to run: sudo rm -f $SYSTEM_BIN/pw"
     fi
 fi
 
@@ -74,5 +74,5 @@ fi
 echo ""
 echo "✅ Uninstallation complete!"
 echo ""
-echo "Note: If you had playwright in your PATH, you may need to restart"
+echo "Note: If you had pw in your PATH, you may need to restart"
 echo "your terminal or run 'hash -r' to clear the command cache."

@@ -11,6 +11,11 @@ playwright
 playwright-cli
 *.bun-build
 
+# Build artifacts (executables)
+pw
+pw-bun
+pw-pkg
+
 # Logs
 *.log
 npm-debug.log*
@@ -47,6 +52,13 @@ test-*.js
 /test-*.ts
 test-fetch.js
 test-port.js
+
+# Debug and profiling files
+debug-*.js
+test-profile.csv
+*.bak
+*.bak2
+*.bak3
 
 # Session files
 .playwright-cli-session.json

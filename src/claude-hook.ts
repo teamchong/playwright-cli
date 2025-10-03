@@ -59,7 +59,7 @@ function validateBashCommand(command: string): {
   message?: string
 } {
   // Check if it's a playwright command
-  if (!command.includes('playwright')) {
+  if (!command.includes('pw')) {
     return { valid: true }
   }
 
@@ -125,7 +125,7 @@ async function executePlaywrightCode(code: string) {
     const page = await BrowserHelper.getActivePage()
     if (!page) {
       return {
-        error: 'No Playwright session. Run "playwright open" first',
+        error: 'No Playwright session. Run "pw open" first',
       }
     }
 
@@ -169,7 +169,7 @@ async function main() {
       const connected = await isBrowserConnected()
       if (!connected) {
         logger.error('No browser session active')
-        logger.info('💡 Run "playwright open" first to start a browser session')
+        logger.info('💡 Run "pw open" first to start a browser session')
         process.exit(1) // Block execution
       }
     } else if (!validation.valid) {

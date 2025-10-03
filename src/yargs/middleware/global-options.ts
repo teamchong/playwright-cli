@@ -105,7 +105,7 @@ export async function environmentConfigMiddleware<T extends BaseCommandOptions>(
   // Update global config from environment
   globalState.config = {
     ...globalState.config,
-    defaultPort: env.PLAYWRIGHT_PORT ? parseInt(env.PLAYWRIGHT_PORT) : 9222,
+    defaultPort: env.PLAYWRIGHT_PORT ? parseInt(env.PLAYWRIGHT_PORT) : (env.PORT ? parseInt(env.PORT) : 9222),
     defaultTimeout: env.PLAYWRIGHT_TIMEOUT
       ? parseInt(env.PLAYWRIGHT_TIMEOUT)
       : 30000,
@@ -176,6 +176,13 @@ export async function globalOptionsMiddleware<T extends BaseCommandOptions>(
         `Invalid port number: ${argv.port}. Must be between 1 and 65535.`
       )
     }
+
+    // Check for reserved monitor browser port
+    if (argv.port === 39223) {
+      throw new Error(
+        `Port ${argv.port} is reserved for the internal monitor browser. Please use a different port.`
+      )
+    }
   }
 
   // Set default port if not provided
@@ -224,22 +231,14 @@ export async function browserConfigMiddleware<T extends BaseCommandOptions>(
 export async function loggingMiddleware<T extends BaseCommandOptions>(
   argv: ArgumentsCamelCase<T>
 ): Promise<void> {
-  // Log command start in debug mode
-  if (argv.verbose) {
-    const command = argv._.length > 0 ? argv._[0] : 'unknown'
-    console.log(chalk.gray(`[DEBUG] Starting command: ${command}`))
-    console.log(chalk.gray(`[DEBUG] Port: ${argv.port}`))
-    console.log(chalk.gray(`[DEBUG] Started at: ${new Date().toISOString()}`))
-  }
+  // Skip logging if quiet mode or json output is enabled
+  // JSON output commands need clean output, and quiet mode suppresses all logging
+  const shouldLog = !argv.quiet && !(argv as any).json && argv.verbose
 
-  // Set up process exit handler to log timing
-  if (argv.verbose && !process.env.NODE_ENV?.includes('test')) {
-    const originalExit = process.exit
-    process.exit = ((code?: number) => {
-      const duration = Date.now() - globalState.startTime
-      console.log(chalk.gray(`[DEBUG] Command completed in ${duration}ms`))
-      return originalExit.call(process, code)
-    }) as typeof process.exit
+  if (shouldLog) {
+    const command = argv._?.[0] || 'unknown'
+    console.log(`Starting command: ${command}`)
+    console.log(`Port: ${argv.port}`)
   }
 }
 
@@ -283,12 +282,11 @@ export function selectorShorthandMiddleware<
         break
     }
 
-    // Log transformation in verbose mode
-    if (argv.verbose && argv.selector !== selector) {
+    // Log transformation in verbose mode (but not in JSON/quiet mode)
+    const shouldLog = argv.verbose && !argv.quiet && !(argv as any).json
+    if (shouldLog && argv.selector !== selector) {
       console.log(
-        chalk.gray(
-          `[DEBUG] Transformed selector "${selector}" to "${argv.selector}"`
-        )
+        `Transformed selector "${selector}" to "${argv.selector}"`
       )
     }
   }
@@ -306,11 +304,10 @@ export async function browserConnectionMiddleware<T extends BaseCommandOptions>(
     throw new Error('Port is required for browser commands')
   }
 
-  // In verbose mode, log connection details
-  if (argv.verbose) {
-    console.log(
-      chalk.gray(`[DEBUG] Will connect to browser on port ${argv.port}`)
-    )
+  // In verbose mode, log connection details (but not in JSON/quiet mode)
+  const shouldLog = argv.verbose && !argv.quiet && !(argv as any).json
+  if (shouldLog) {
+    console.log(`Will connect to browser on port ${argv.port}`)
   }
 }
 
@@ -357,9 +354,6 @@ export async function configFileMiddleware<T extends BaseCommandOptions>(
         argv.port = config.defaultPort
       }
 
-      if (argv.verbose) {
-        console.log(chalk.gray(`[DEBUG] Loaded config from ${configPath}`))
-      }
 
       break // Use first config file found
     } catch (error) {

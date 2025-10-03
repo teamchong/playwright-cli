@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { execSync } from 'child_process'
-
+import { TEST_PORT } from '../../../../test-utils/test-constants'
 /**
  * Real Perf Command Tests
  *
@@ -19,7 +19,7 @@ describe('perf command - REAL TESTS', () => {
       const output = execSync(cmd, {
         encoding: 'utf8',
         timeout,
-        env: { ...process.env },
+        env: { ...process.env, NODE_ENV: undefined },
       })
       return { output, exitCode: 0 }
     } catch (error: any) {
@@ -58,14 +58,14 @@ describe('perf command - REAL TESTS', () => {
 
   describe('handler execution', () => {
     it('should work with global browser session', () => {
-      const { output, exitCode } = runCommand(`${CLI} perf`)
+      const { output, exitCode } = runCommand(`${CLI} perf --port ${TEST_PORT}`)
       expect([0, 1]).toContain(exitCode)
       // Browser is now available via global setup
     })
 
     it('should handle different port gracefully', () => {
       // Perf command doesn't need browser connection, should work regardless of port
-      const { output, exitCode } = runCommand(`${CLI} perf --port 8080`)
+      const { output, exitCode } = runCommand(`${CLI} perf --port ${TEST_PORT}`)
       expect(exitCode).toBe(0)
       expect(output).toMatch(
         /No performance data available|Performance Statistics/i

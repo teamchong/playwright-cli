@@ -43,7 +43,7 @@ export const testCommand: CommandModule<{}, TestArgs> = {
     logger.info('Running Playwright tests...')
 
     return new Promise<void>((resolve, reject) => {
-      const child = spawn('npx', ['playwright', ...args], {
+      const child = spawn('npx', ['pw', ...args], {
         stdio: 'inherit',
       })
 

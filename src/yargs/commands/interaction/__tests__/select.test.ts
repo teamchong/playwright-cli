@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { execSync } from 'child_process'
-
+import { TEST_PORT } from '../../../../test-utils/test-constants'
 /**
  * Simplified Select Command Tests - TAB ID FROM COMMAND OUTPUT
  *
@@ -22,7 +22,7 @@ describe('select command - TAB ID FROM OUTPUT', () => {
       const output = execSync(cmd, {
         encoding: 'utf8',
         timeout,
-        env: { ...process.env },
+        env: { ...process.env, NODE_ENV: undefined },
         stdio: 'pipe',
       })
       return { output, exitCode: 0 }
@@ -47,7 +47,7 @@ describe('select command - TAB ID FROM OUTPUT', () => {
     // Browser already running from global setup
     // Create a dedicated test tab for this test suite and capture its ID
     const { output } = runCommand(
-      `${CLI} tabs new --url "data:text/html,<div id='test-container'>Select Test Suite Ready</div>"`
+      `${CLI} tabs new --url "data:text/html,<div id='test-container'>Select Test Suite Ready</div>" --port ${TEST_PORT}`
     )
     testTabId = extractTabId(output)
     console.log(`Select test suite using tab ID: ${testTabId}`)
@@ -58,7 +58,7 @@ describe('select command - TAB ID FROM OUTPUT', () => {
     if (testTabId) {
       try {
         // First check if tab still exists
-        const { output } = runCommand(`${CLI} tabs list --json`)
+        const { output } = runCommand(`${CLI} tabs list --json --port ${TEST_PORT}`)
         const data = JSON.parse(output)
         const tabExists = data.tabs.some((tab: any) => tab.id === testTabId)
 
@@ -67,7 +67,7 @@ describe('select command - TAB ID FROM OUTPUT', () => {
           const tabIndex = data.tabs.findIndex(
             (tab: any) => tab.id === testTabId
           )
-          runCommand(`${CLI} tabs close --index ${tabIndex}`)
+          runCommand(`${CLI} tabs close --index ${tabIndex} --port ${TEST_PORT}`)
           console.log(`Closed test tab ${testTabId}`)
         }
       } catch (error) {
@@ -90,12 +90,12 @@ describe('select command - TAB ID FROM OUTPUT', () => {
     it('should select option using captured tab ID', () => {
       // Navigate our test tab to a page with a select dropdown
       runCommand(
-        `${CLI} navigate "data:text/html,<select id='test-select'><option value='a'>Option A</option><option value='b'>Option B</option><option value='c'>Option C</option></select>" --tab-id ${testTabId}`
+        `${CLI} navigate "data:text/html,<select id='test-select'><option value='a'>Option A</option><option value='b'>Option B</option><option value='c'>Option C</option></select>" --tab-id ${testTabId} --port ${TEST_PORT}`
       )
 
       // Select an option using our captured tab ID
       const { exitCode } = runCommand(
-        `${CLI} select "#test-select" "b" --tab-id ${testTabId}`
+        `${CLI} select "#test-select" "b" --tab-id ${testTabId} --port ${TEST_PORT}`
       )
       expect(exitCode).toBe(0)
     })
@@ -103,12 +103,12 @@ describe('select command - TAB ID FROM OUTPUT', () => {
     it('should select multiple options in multi-select', () => {
       // Navigate to page with multi-select dropdown
       runCommand(
-        `${CLI} navigate "data:text/html,<select id='multi-select' multiple><option value='1'>One</option><option value='2'>Two</option><option value='3'>Three</option></select>" --tab-id ${testTabId}`
+        `${CLI} navigate "data:text/html,<select id='multi-select' multiple><option value='1'>One</option><option value='2'>Two</option><option value='3'>Three</option></select>" --tab-id ${testTabId} --port ${TEST_PORT}`
       )
 
       // Select multiple options in the same tab
       const { exitCode } = runCommand(
-        `${CLI} select "#multi-select" "1" "3" --tab-id ${testTabId}`
+        `${CLI} select "#multi-select" "1" "3" --tab-id ${testTabId} --port ${TEST_PORT}`
       )
       expect(exitCode).toBe(0)
     })
@@ -116,29 +116,29 @@ describe('select command - TAB ID FROM OUTPUT', () => {
     it('should work with different select elements', () => {
       // Navigate to page with multiple select elements
       runCommand(
-        `${CLI} navigate "data:text/html,<select id='color'><option value='red'>Red</option><option value='blue'>Blue</option></select><select id='size'><option value='s'>Small</option><option value='l'>Large</option></select>" --tab-id ${testTabId}`
+        `${CLI} navigate "data:text/html,<select id='color'><option value='red'>Red</option><option value='blue'>Blue</option></select><select id='size'><option value='s'>Small</option><option value='l'>Large</option></select>" --tab-id ${testTabId} --port ${TEST_PORT}`
       )
 
       // Select from different dropdowns in the same tab
       expect(
-        runCommand(`${CLI} select "#color" "blue" --tab-id ${testTabId}`)
+        runCommand(`${CLI} select "#color" "blue" --tab-id ${testTabId} --port ${TEST_PORT}`)
           .exitCode
       ).toBe(0)
       expect(
-        runCommand(`${CLI} select "#size" "l" --tab-id ${testTabId}`).exitCode
+        runCommand(`${CLI} select "#size" "l" --tab-id ${testTabId} --port ${TEST_PORT}`).exitCode
       ).toBe(0)
     })
 
     it('should handle non-existent element gracefully', () => {
       // Navigate to page without select element
       runCommand(
-        `${CLI} navigate "data:text/html,<div>No select here</div>" --tab-id ${testTabId}`
+        `${CLI} navigate "data:text/html,<div>No select here</div>" --tab-id ${testTabId} --port ${TEST_PORT}`
       )
 
       // Try to select from non-existent element - command hangs on non-existent selectors
       expect(() => {
         runCommand(
-          `${CLI} select "#nonexistent" "value" --tab-id ${testTabId}`,
+          `${CLI} select "#nonexistent" "value" --tab-id ${testTabId} --port ${TEST_PORT}`,
           2000
         )
       }).toThrow('Command timed out (hanging)')
@@ -146,8 +146,8 @@ describe('select command - TAB ID FROM OUTPUT', () => {
 
     it('should handle invalid tab ID', () => {
       const { output, exitCode } = runCommand(
-        `${CLI} select "#test" "value" --tab-id "INVALID_ID"`,
-        2000
+        `${CLI} select "#test" "value" --tab-id "INVALID_ID" --port ${TEST_PORT}`,
+        10000
       )
       expect(exitCode).toBe(1)
       expect(output).toMatch(/not found/i)
@@ -155,7 +155,7 @@ describe('select command - TAB ID FROM OUTPUT', () => {
 
     it('should prevent conflicting tab arguments', () => {
       const { output, exitCode } = runCommand(
-        `${CLI} select "#test" "value" --tab-index 0 --tab-id ${testTabId}`,
+        `${CLI} select "#test" "value" --tab-index 0 --tab-id ${testTabId} --port ${TEST_PORT}`,
         2000
       )
       expect(exitCode).toBe(1)

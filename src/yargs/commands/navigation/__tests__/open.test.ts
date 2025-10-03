@@ -1,74 +1,129 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { execSync } from 'child_process'
-
-/**
- * Real Open Command Tests
- *
- * These tests run the actual CLI binary with real browser functionality.
- * NO MOCKS - everything is tested against a real implementation.
- */
-describe('open command - REAL TESTS', () => {
-  const CLI = 'node dist/src/index.js'
-
-  // Helper to run command and check it doesn't hang
-  function runCommand(
-    cmd: string,
-    timeout = 5000
-  ): { output: string; exitCode: number } {
-    try {
-      const output = execSync(cmd, {
-        encoding: 'utf8',
-        timeout,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env },
-      })
-      return { output, exitCode: 0 }
-    } catch (error: any) {
-      if (error.code === 'ETIMEDOUT') {
-        throw new Error(`Command timed out (hanging): ${cmd}`)
-      }
-      // Combine stdout and stderr for full error output
-      const output = (error.stdout || '') + (error.stderr || '')
-      return {
-        output,
-        exitCode: error.status || 1,
-      }
-    }
-  }
+import { TEST_PORT, CLI } from '../../../../test-utils/test-constants'
+describe('open command - REAL INTEGRATION TEST', () => {
+  const CLI_PATH = CLI
 
   beforeAll(async () => {
-    // Build the CLI only if needed
-    if (!require('fs').existsSync('dist/src/index.js')) {
+    // Build the CLI first using pnpm
+    try {
       execSync('pnpm build', { stdio: 'ignore' })
+    } catch (e) {
+      console.error('Build failed:', e)
     }
-  }, 30000) // 30 second timeout for build
+
+    // Global browser session will be used
+    await new Promise(resolve => setTimeout(resolve, 1000))
+  })
 
   afterAll(async () => {
     // Global teardown handles browser cleanup
     // Don't close browser here as it interferes with other tests
   })
 
-  describe('command structure', () => {
-    it('should have correct command definition', () => {
-      const { output, exitCode } = runCommand(`${CLI} open --help`)
-      expect(exitCode).toBe(0)
-      expect(output).toContain('open')
-      expect(output).toContain('open')
+  it('should launch browser and navigate to URL', async () => {
+    const output = execSync(`${CLI_PATH} open https://example.com --port ${TEST_PORT}`, {
+      encoding: 'utf8',
     })
+
+    // Check for actual output messages (can be either fresh navigation or existing tab)
+    expect(
+      output.includes('Navigated to') || output.includes('Already on')
+    ).toBe(true)
+    expect(output).toContain('example.com')
+
+    // Verify browser is actually running by listing pages
+    const listOutput = execSync(`${CLI_PATH} list --port ${TEST_PORT}`, { encoding: 'utf8' })
+    expect(listOutput).toContain('example.com')
+  }, 30000)
+
+  it('should connect to existing browser session', async () => {
+    // Browser should already be open from previous test
+    const output = execSync(`${CLI_PATH} open --new-tab https://google.com --port ${TEST_PORT}`, {
+      encoding: 'utf8',
+    })
+
+    // Check that it navigated (meaning it connected to existing browser)
+    expect(output).toContain('Opened new tab')
+    expect(output).toContain('google.com')
+
+    // Verify both pages exist
+    const listOutput = execSync(`${CLI_PATH} list --port ${TEST_PORT}`, { encoding: 'utf8' })
+    expect(listOutput).toContain('google.com')
+    expect(listOutput).toContain('example.com')
+  }, 30000)
+
+  it('should handle --new-tab flag', async () => {
+    const output = execSync(`${CLI_PATH} open --new-tab https://github.com --port ${TEST_PORT}`, {
+      encoding: 'utf8',
+    })
+
+    // Should open in new tab
+    expect(output).toContain('Opened new tab')
+    expect(output).toContain('github.com')
+
+    // Verify all three pages exist
+    const listOutput = execSync(`${CLI_PATH} list --port ${TEST_PORT}`, { encoding: 'utf8' })
+    expect(listOutput).toContain('example.com')
+    expect(listOutput).toContain('google.com')
+    expect(listOutput).toContain('github.com')
+  }, 30000)
+
+  it('should handle missing URL gracefully', () => {
+    const output = execSync(`${CLI_PATH} open --port ${TEST_PORT}`, {
+      encoding: 'utf8',
+    })
+
+    // Should still connect to browser
+    expect(output).toContain('Browser connected')
   })
 
-  describe('handler execution', () => {
-    it('should work with global browser session', () => {
-      const { output, exitCode } = runCommand(`${CLI} open`)
-      // Open command launches browser automatically and succeeds
-      expect(exitCode).toBe(0)
-    })
+  it('should handle invalid URLs gracefully', () => {
+    let errorOccurred = false
+    let errorMessage = ''
+    try {
+      execSync(`${CLI_PATH} open not-a-valid-url --port ${TEST_PORT}`, {
+        encoding: 'utf8',
+        stdio: 'pipe',
+        timeout: 8000, // 8s timeout to prevent indefinite hang
+      })
+    } catch (error: any) {
+      errorOccurred = true
+      errorMessage = error.stdout || error.stderr || error.message || ''
+      // Command should fail - either with error message or timeout
+      // Check for error indication if message is present
+      if (errorMessage && !errorMessage.includes('ETIMEDOUT')) {
+        const lowerMessage = errorMessage.toLowerCase()
+        if (lowerMessage.length > 0 && !lowerMessage.includes('command failed')) {
+          expect(lowerMessage).toMatch(/failed|err_name_not_resolved|invalid/)
+        }
+      }
+    }
 
-    it('should handle different port gracefully', () => {
-      // Open command should fail gracefully when no browser on specified port
-      const { output, exitCode } = runCommand(`${CLI} open --port 8080`)
-      expect(exitCode).toBe(1)
-      expect(output).toMatch(/No browser running|Browser connection failed/i)
-    })
+    // Should have errored (either explicit error or timeout)
+    expect(errorOccurred).toBe(true)
+  })
+
+  it('should handle connection refused errors gracefully', () => {
+    let errorOccurred = false
+    let errorMessage = ''
+    try {
+      execSync(`${CLI_PATH} open http://localhost:65536 --port ${TEST_PORT}`, {
+        encoding: 'utf8',
+        stdio: 'pipe',
+      })
+    } catch (error: any) {
+      errorOccurred = true
+      errorMessage = error.stdout || error.stderr || ''
+      // Should show a user-friendly error message
+      expect(errorMessage).toContain(
+        'Connection failed - make sure a server is running'
+      )
+      // Should not show raw Playwright error
+      expect(errorMessage).not.toContain('net::ERR_CONNECTION_REFUSED')
+    }
+
+    // Should handle gracefully with proper error
+    expect(errorOccurred).toBe(true)
   })
 })

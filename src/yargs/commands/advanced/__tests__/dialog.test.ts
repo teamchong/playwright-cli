@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { execSync } from 'child_process'
-
+import { TEST_PORT } from '../../../../test-utils/test-constants'
 /**
  * Real Dialog Command Tests
  *
@@ -13,13 +13,13 @@ describe('dialog command - REAL TESTS', () => {
   // Helper to run command and check it doesn't hang
   function runCommand(
     cmd: string,
-    timeout = 5000
+    timeout = 3000
   ): { output: string; exitCode: number } {
     try {
       const output = execSync(cmd, {
         encoding: 'utf8',
         timeout,
-        env: { ...process.env },
+        env: { ...process.env, NODE_ENV: undefined },
       })
       return { output, exitCode: 0 }
     } catch (error: any) {
@@ -58,22 +58,22 @@ describe('dialog command - REAL TESTS', () => {
   })
 
   describe('handler execution', () => {
-    it('should handle accept action with no browser gracefully', () => {
-      const { output, exitCode } = runCommand(`${CLI} dialog accept`)
-      expect([0, 1]).toContain(exitCode)
-      // Browser is now available via global setup
+    it('should handle accept action with no dialog gracefully', () => {
+      const { output, exitCode } = runCommand(`${CLI} dialog accept --port ${TEST_PORT}`, 5000)
+      expect(exitCode).toBe(1)
+      expect(output).toMatch(/No dialog appeared|No browser running|browser running/i)
     })
 
-    it('should handle dismiss action with no browser gracefully', () => {
-      const { output, exitCode } = runCommand(`${CLI} dialog dismiss`)
-      expect([0, 1]).toContain(exitCode)
-      // Browser is now available via global setup
+    it('should handle dismiss action with no dialog gracefully', () => {
+      const { output, exitCode } = runCommand(`${CLI} dialog dismiss --port ${TEST_PORT}`, 5000)
+      expect(exitCode).toBe(1)
+      expect(output).toMatch(/No dialog appeared|No browser running|browser running/i)
     })
 
     it('should handle different port gracefully', () => {
       // Command should fail gracefully when trying to connect to non-existent port
       const { output, exitCode } = runCommand(
-        `${CLI} dialog accept --port 8080`,
+        `${CLI} dialog accept --port 18999`,  // Use a definitely unused port
         3000
       )
       expect(exitCode).toBe(1)

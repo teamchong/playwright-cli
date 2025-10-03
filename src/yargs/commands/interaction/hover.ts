@@ -79,7 +79,7 @@ export const hoverCommand = createCommand<HoverOptions>({
     const { selector, port, timeout, force, ref } = argv
     const tabIndex = argv['tab-index'] as number | undefined
     const tabId = argv['tab-id'] as string | undefined
-    
+
     // Resolve ref to selector if using --ref
     let actualSelector = selector
     if (ref) {
@@ -92,7 +92,7 @@ export const hoverCommand = createCommand<HoverOptions>({
       actualSelector = storedSelector
     }
 
-    const targetDesc = ref ? `[ref=${ref}]` : actualSelector
+    const targetDesc = ref ? `[${ref}]` : actualSelector
     const tabTarget =
       tabIndex !== undefined
         ? ` in tab ${tabIndex}`
@@ -110,7 +110,7 @@ export const hoverCommand = createCommand<HoverOptions>({
         if (spinner) {
           spinner.text = `Finding element: "${actualSelector}"...`
         }
-        
+
         const textSelectorResult = await findBestSelector(page, actualSelector)
         if (textSelectorResult) {
           actualSelector = textSelectorResult.selector
@@ -119,13 +119,18 @@ export const hoverCommand = createCommand<HoverOptions>({
           }
         } else {
           // If not a CSS selector and no element found by text, throw clear error
-          const isCss = /^[#.]/.test(actualSelector) || /[.\[\]\>\+\~:]/.test(actualSelector) || /^[a-z]+$/i.test(actualSelector)
+          const isCss =
+            /^[#.]/.test(actualSelector) ||
+            /[.\[\]\>\+\~:]/.test(actualSelector) ||
+            /^[a-z]+$/i.test(actualSelector)
           if (!isCss) {
-            throw new Error(`Element not found by text: "${actualSelector}". Try using a CSS selector or check the page content with 'snapshot'.`)
+            throw new Error(
+              `Element not found by text: "${actualSelector}". Try using a CSS selector or check the page content with 'snapshot'.`
+            )
           }
         }
       }
-      
+
       await page.hover(actualSelector, {
         timeout,
         force,

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { execSync } from 'child_process'
-
+import { TEST_PORT } from '../../../../test-utils/test-constants'
 /**
  * Real Tabs Command Tests
  *
@@ -19,7 +19,7 @@ describe('tabs command - REAL TESTS', () => {
       const output = execSync(cmd, {
         encoding: 'utf8',
         timeout,
-        env: { ...process.env },
+        env: { ...process.env, NODE_ENV: undefined },
       })
       return { output, exitCode: 0 }
     } catch (error: any) {
@@ -88,7 +88,7 @@ describe('tabs command - REAL TESTS', () => {
   describe('handler execution', () => {
     describe('list action', () => {
       it('should list tabs with global browser session', () => {
-        const { output, exitCode } = runCommand(`${CLI} tabs list`)
+        const { output, exitCode } = runCommand(`${CLI} tabs list --port ${TEST_PORT}`)
         expect(exitCode).toBe(0)
         expect(output).toContain('tabs')
       })
@@ -97,7 +97,7 @@ describe('tabs command - REAL TESTS', () => {
     describe('new action', () => {
       it('should create new tab with global browser session', () => {
         const { output, exitCode } = runCommand(
-          `${CLI} tabs new --url https://example.com`
+          `${CLI} tabs new --url https://example.com --port ${TEST_PORT}`
         )
         expect(exitCode).toBe(0)
         expect(output).toContain('Tab ID')
@@ -107,7 +107,7 @@ describe('tabs command - REAL TESTS', () => {
     describe('close action', () => {
       it('should handle tab close with global browser session', () => {
         // Try to close a tab - may succeed or fail depending on tab availability
-        const { output, exitCode } = runCommand(`${CLI} tabs close --index 999`)
+        const { output, exitCode } = runCommand(`${CLI} tabs close --index 999 --port ${TEST_PORT}`)
         // Either succeeds (if tab exists) or fails gracefully (if no tab at index)
         expect([0, 1]).toContain(exitCode)
       })
@@ -116,7 +116,7 @@ describe('tabs command - REAL TESTS', () => {
     describe('select action', () => {
       it('should handle tab select with global browser session', () => {
         // Try to select a tab - should work with existing tabs
-        const { output, exitCode } = runCommand(`${CLI} tabs select --index 0`)
+        const { output, exitCode } = runCommand(`${CLI} tabs select --index 0 --port ${TEST_PORT}`)
         expect([0, 1]).toContain(exitCode)
       })
     })

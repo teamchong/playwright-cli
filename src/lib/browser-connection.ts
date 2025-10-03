@@ -74,7 +74,7 @@ export class BrowserConnection {
 
     // Alternative: Use chrome.debugger API or extension
     throw new Error(
-      'Direct execution requires WebSocket connection. Use "playwright open" with Playwright mode.'
+      'Direct execution requires WebSocket connection. Use "pw open" with Playwright mode.'
     )
   }
 }

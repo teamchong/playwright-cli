@@ -9,6 +9,7 @@
  */
 
 import { execSync } from 'child_process'
+import { TEST_PORT, CLI } from './test-constants'
 
 export interface TabInfo {
   id: string
@@ -18,7 +19,6 @@ export interface TabInfo {
 }
 
 export class TabManager {
-  private static CLI = 'node dist/src/index.js'
   private static createdTabs: Set<string> = new Set()
 
   /**
@@ -29,11 +29,27 @@ export class TabManager {
     timeout = 5000
   ): { output: string; exitCode: number } {
     try {
+      // Clean environment to avoid inheriting test-specific flags from test runner
+      // But preserve flags explicitly set in the command
+      const cleanEnv = { ...process.env }
+
+      // Remove NODE_ENV=test so subprocesses don't activate test-mode behavior
+      // The CLI's .fail() handler behaves differently in test mode (throws instead of exit)
+      delete cleanEnv.NODE_ENV
+
+      // Only remove verbose flags if --quiet or --json is NOT in the command
+      const hasQuietOrJson = cmd.includes('--quiet') || cmd.includes('--json')
+      if (!hasQuietOrJson) {
+        delete cleanEnv.PLAYWRIGHT_VERBOSE
+        delete cleanEnv.PLAYWRIGHT_DEBUG
+        delete cleanEnv.DEBUG
+      }
+
       const output = execSync(cmd, {
         encoding: 'utf8',
         timeout,
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env },
+        env: cleanEnv,
       })
       return { output, exitCode: 0 }
     } catch (error: any) {
@@ -70,7 +86,9 @@ export class TabManager {
   static extractAndRegisterTabId(output: string): string {
     const tabIdMatch = output.match(/Tab ID: ([a-fA-F0-9]+)/)
     if (!tabIdMatch) {
-      throw new Error(`Could not extract tab ID from output: ${output}`)
+      // Provide more context in error message
+      const truncated = output.length > 200 ? output.substring(0, 200) + '...' : output
+      throw new Error(`Could not extract tab ID from output. Output was: "${truncated}"`)
     }
     const tabId = tabIdMatch[1]
     this.registerTab(tabId)
@@ -83,7 +101,7 @@ export class TabManager {
   static createTab(url?: string): string {
     const urlArg = url ? `--url ${url}` : ''
     const { output, exitCode } = this.runCommand(
-      `${this.CLI} tabs new ${urlArg}`
+      `${CLI} tabs new ${urlArg} --port ${TEST_PORT}`
     )
 
     if (exitCode !== 0) {
@@ -105,7 +123,7 @@ export class TabManager {
    * Get list of all tabs with their IDs
    */
   static getTabs(): TabInfo[] {
-    const { output, exitCode } = this.runCommand(`${this.CLI} tabs list`)
+    const { output, exitCode } = this.runCommand(`${CLI} tabs list --port ${TEST_PORT}`)
 
     if (exitCode !== 0) {
       throw new Error(`Failed to list tabs: ${output}`)
@@ -176,7 +194,7 @@ export class TabManager {
     }
 
     const { exitCode } = this.runCommand(
-      `${this.CLI} tabs close --index ${tab.index}`
+      `${CLI} tabs close --index ${tab.index} --port ${TEST_PORT}`
     )
     this.createdTabs.delete(tabId)
 
@@ -252,5 +270,96 @@ export class TabManager {
    */
   static clearTracking(): void {
     this.createdTabs.clear()
+  }
+
+  /**
+   * Get current tab count
+   */
+  static getTabCount(): number {
+    try {
+      const tabs = this.getTabs()
+      return tabs.length
+    } catch {
+      return 0
+    }
+  }
+
+  /**
+   * Periodic cleanup to enforce tab limits during test execution
+   * Call this in afterAll() of test suites that create many tabs
+   */
+  static enforceTabLimit(): void {
+    try {
+      const currentCount = this.getTabCount()
+      const MAX_TABS = 10
+
+      if (currentCount > MAX_TABS) {
+        console.log(`⚠️  Tab count (${currentCount}) exceeds limit (${MAX_TABS}), performing cleanup...`)
+        this.cleanupTestTabs()
+      }
+    } catch (error) {
+      console.warn('Failed to enforce tab limit:', error)
+    }
+  }
+
+  /**
+   * Clean up test tabs that may have accumulated from previous runs
+   * Closes tabs with test-like URLs (data: URLs, localhost, etc.)
+   */
+  static cleanupTestTabs(): void {
+    try {
+      const tabs = this.getTabs()
+
+      // Identify test tabs by URL patterns
+      const testTabs = tabs.filter(tab =>
+        tab.url.startsWith('data:text/html') ||
+        tab.url.includes('localhost') ||
+        tab.url.includes('127.0.0.1') ||
+        tab.url.includes('example.com') ||
+        tab.title.includes('Test Page') ||
+        tab.title.includes('Test')
+      )
+
+      console.log(`Found ${testTabs.length} potential test tabs out of ${tabs.length} total tabs`)
+
+      if (testTabs.length > 0) {
+        for (const tab of testTabs) {
+          try {
+            const { exitCode } = this.runCommand(
+              `${CLI} tabs close --tab-id ${tab.id} --port ${TEST_PORT}`,
+              3000 // Short timeout for cleanup
+            )
+            if (exitCode === 0) {
+              console.log(`Closed test tab: ${tab.title.substring(0, 30)}...`)
+            }
+          } catch (error) {
+            // Continue cleanup even if individual tab close fails
+            console.warn(`Failed to close test tab ${tab.id}:`, error)
+          }
+        }
+      }
+
+      // Enforce a reasonable tab limit (close oldest tabs if too many)
+      const remainingTabs = this.getTabs()
+      const MAX_TABS = 10 // Lower limit to prevent browser crashes
+
+      if (remainingTabs.length > MAX_TABS) {
+        const excessTabs = remainingTabs
+          .filter(tab => !tab.url.includes('chrome://') && !tab.url.includes('about:'))
+          .slice(0, remainingTabs.length - MAX_TABS)
+
+        console.log(`Closing ${excessTabs.length} excess tabs to enforce limit of ${MAX_TABS}`)
+
+        for (const tab of excessTabs) {
+          try {
+            this.runCommand(`${CLI} tabs close --tab-id ${tab.id} --port ${TEST_PORT}`, 2000)
+          } catch (error) {
+            console.warn(`Failed to close excess tab ${tab.id}:`, error)
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('Could not perform test tab cleanup:', error)
+    }
   }
 }

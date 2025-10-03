@@ -191,20 +191,18 @@ describe('Command Builder', () => {
       expect(mockConsole.log).toHaveBeenCalledWith('{\n  "data": "test"\n}')
     })
 
-    it('should show debug messages only in verbose mode', () => {
+    it('should not output debug messages to stdout (prevents pollution)', () => {
       const logger = createLogger({ port: 9222 } as BaseCommandOptions)
       logger.debug('Debug message')
       expect(mockConsole.log).not.toHaveBeenCalled()
 
+      // Even in verbose mode, debug output is suppressed to prevent stdout pollution
       const verboseLogger = createLogger({
         port: 9222,
         verbose: true,
       } as BaseCommandOptions)
       verboseLogger.debug('Debug message')
-      expect(mockConsole.log).toHaveBeenCalledWith(
-        expect.stringContaining('[DEBUG]'),
-        'Debug message'
-      )
+      expect(mockConsole.log).not.toHaveBeenCalled()
     })
   })
 

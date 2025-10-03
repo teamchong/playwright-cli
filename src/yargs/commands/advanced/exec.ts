@@ -21,7 +21,8 @@ export const execCommand = createCommand<ExecuteOptions>({
   },
 
   command: 'exec [file]',
-  describe: 'Execute JavaScript/TypeScript file or inline code in Playwright session',
+  describe:
+    'Execute JavaScript/TypeScript file or inline code in Playwright session',
 
   builder: yargs => {
     return yargs
@@ -34,7 +35,8 @@ export const execCommand = createCommand<ExecuteOptions>({
         type: 'string',
       })
       .option('simple', {
-        describe: 'Use simplified API with helper functions (goto, click, type, etc.)',
+        describe:
+          'Use simplified API with helper functions (goto, click, type, etc.)',
         type: 'boolean',
         default: false,
       })
@@ -53,6 +55,11 @@ export const execCommand = createCommand<ExecuteOptions>({
         describe: 'Timeout in milliseconds',
         type: 'number',
         default: 30000,
+      })
+      .option('quiet', {
+        describe: 'Suppress console output, only show result',
+        type: 'boolean',
+        default: false,
       })
       .option('tab-index', {
         describe: 'Target specific tab by index (0-based)',
@@ -90,24 +97,46 @@ export const execCommand = createCommand<ExecuteOptions>({
       // Get code from file, inline, or stdin
       // Priority: inline > file > stdin
       let code: string
+      let codeSource: 'inline' | 'file' | 'stdin'
+      const isQuiet = argv.quiet as boolean
       if (argv.inline) {
         // Use inline code (highest priority)
         code = argv.inline as string
-        logger.info(`⚡ Executing inline JavaScript...`)
+        codeSource = 'inline'
       } else if (argv.file) {
         // Read from file
-        code = await fs.promises.readFile(argv.file, 'utf-8')
-        logger.info(`📄 Executing ${argv.file}...`)
+        try {
+          code = await fs.promises.readFile(argv.file, 'utf-8')
+          codeSource = 'file'
+        } catch (fileError: any) {
+          if (fileError.code === 'ENOENT') {
+            logger.error(`File not found: ${argv.file}`)
+          } else {
+            logger.error(`Failed to read file: ${fileError.message}`)
+          }
+          throw new Error('Command failed')
+        }
       } else {
-        // Read from stdin
-        logger.info(
-          chalk.gray('📝 Reading from stdin (press Ctrl+D when done)...')
-        )
+        // Read from stdin only if stdin is a pipe (not TTY)
+        // If stdin is TTY, we'd hang waiting for user input
+        const isTTY = process.stdin.isTTY
+
+        if (isTTY) {
+          throw new Error('No code provided. Use --inline <code> or provide a file path, or pipe code via stdin.')
+        }
+
+        // Read from stdin (stdin is a pipe, not interactive terminal)
+        if (!isQuiet) {
+          logger.info(
+            chalk.gray('📝 Reading from stdin (press Ctrl+D when done)...')
+          )
+        }
         const chunks: Buffer[] = []
         for await (const chunk of process.stdin) {
           chunks.push(chunk)
         }
         code = Buffer.concat(chunks).toString('utf-8')
+        codeSource = 'stdin'
       }
 
       const tabIndex = argv['tab-index'] as number | undefined
@@ -118,45 +147,80 @@ export const execCommand = createCommand<ExecuteOptions>({
         tabIndex,
         tabId,
         async page => {
+          // Log execution start after successful connection
+          if (!isQuiet) {
+            if (codeSource === 'inline') {
+              logger.info(`⚡ Executing inline JavaScript...`)
+            } else if (codeSource === 'file') {
+              logger.info(`📄 Executing ${argv.file}...`)
+            }
+          }
+
           // Create a function that has access to page and context
           const AsyncFunction = Object.getPrototypeOf(
             async function () {}
           ).constructor
 
-          // If code is a single expression without explicit return, add implicit return
-          // This handles cases like "await page.title()" -> "return await page.title()"
-          let wrappedCode = code.trim()
-          if (!wrappedCode.includes('return') && !wrappedCode.includes(';')) {
-            // Single expression - add implicit return
-            wrappedCode = `return ${wrappedCode}`
+          let executeCode
+          try {
+            const trimmedCode = code.trim()
+            // Debug: Log the code if verbose
+            if (argv.verbose) {
+              console.log('Executing code:', trimmedCode)
+            }
+            executeCode = new AsyncFunction(
+              'page',
+              'context',
+              'browser',
+              'console',
+              trimmedCode
+            )
+          } catch (syntaxError: any) {
+            // Handle syntax errors in the script
+            const errorMessage = syntaxError.message || String(syntaxError)
+            if (argv.json) {
+              console.log(
+                JSON.stringify(
+                  {
+                    error: `Syntax error in script: ${errorMessage}`,
+                    console: [],
+                  },
+                  null,
+                  2
+                )
+              )
+            } else {
+              console.error(`❌ Syntax error in script: ${errorMessage}`)
+            }
+            throw syntaxError
           }
-
-          const executeCode = new AsyncFunction(
-            'page',
-            'context',
-            'browser',
-            'console',
-            wrappedCode
-          )
 
           // Create a console wrapper that captures output
           const consoleOutput: any[] = []
           const consoleWrapper = {
             log: (...args: any[]) => {
               consoleOutput.push({ type: 'log', args })
-              logger.info(args.map(String).join(' '))
+              if (!isQuiet) {
+                logger.info(args.map(String).join(' '))
+              }
             },
             error: (...args: any[]) => {
               consoleOutput.push({ type: 'error', args })
-              logger.error(args.map(String).join(' '))
+              if (!isQuiet) {
+                logger.error(args.map(String).join(' '))
+              }
             },
             warn: (...args: any[]) => {
               consoleOutput.push({ type: 'warn', args })
-              logger.warn(args.map(String).join(' '))
+              if (!isQuiet) {
+                logger.warn(args.map(String).join(' '))
+              }
             },
             info: (...args: any[]) => {
               consoleOutput.push({ type: 'info', args })
-              console.info(...args)
+              if (!isQuiet) {
+                console.info(...args)
+              }
             },
           }
 
@@ -164,25 +228,63 @@ export const execCommand = createCommand<ExecuteOptions>({
           const browserContext = page.context()
           const browser = browserContext.browser()
 
+          // Create alias for compatibility - tests expect 'context' but we pass 'browserContext'
+          const context = browserContext
+
+          // Set a reasonable default timeout for page operations
+          page.setDefaultTimeout(5000) // 5 seconds default timeout
+
           // Execute the code with appropriate context
           let result
-          if (argv.simple) {
-            // Use simplified context with helper functions
-            result = await executeWithSimplifiedContext(
-              code,
-              page,
-              browserContext,
-              browser,
-              consoleWrapper
-            )
-          } else {
-            // Use standard Playwright API context
-            result = await executeCode(
-              page,
-              browserContext,
-              browser,
-              consoleWrapper
-            )
+          try {
+            // Add timeout to execution to prevent hanging
+            const executePromise = argv.simple
+              ? executeWithSimplifiedContext(
+                  code,
+                  page,
+                  context,
+                  browser,
+                  consoleWrapper
+                )
+              : executeCode(page, context, browser, consoleWrapper)
+
+            // Set a reasonable timeout for script execution (30 seconds)
+            let timeoutHandle: NodeJS.Timeout
+            const timeoutPromise = new Promise((_, reject) => {
+              timeoutHandle = setTimeout(
+                () =>
+                  reject(
+                    new Error('Script execution timed out after 30 seconds')
+                  ),
+                30000
+              )
+            })
+
+            try {
+              result = await Promise.race([executePromise, timeoutPromise])
+            } finally {
+              // Always clear the timeout to prevent hanging
+              clearTimeout(timeoutHandle!)
+            }
+          } catch (execError: any) {
+            // Handle execution errors gracefully
+            const errorMessage = execError.message || String(execError)
+            if (argv.json) {
+              console.log(
+                JSON.stringify(
+                  {
+                    error: errorMessage,
+                    console: consoleOutput,
+                  },
+                  null,
+                  2
+                )
+              )
+            } else {
+              console.error(`❌ Execution error: ${errorMessage}`)
+            }
+            // Throw to propagate error up, will be caught by outer handler
+            throw execError
           }
 
           if (argv.json) {
@@ -205,14 +307,22 @@ export const execCommand = createCommand<ExecuteOptions>({
             } else {
               resultString = String(result)
             }
-            logger.info(chalk.green('✅ Result:') + ' ' + resultString)
-          } else {
+            if (isQuiet) {
+              // In quiet mode, only output the result
+              console.log(resultString)
+            } else {
+              logger.info(chalk.green('✅ Result:') + ' ' + resultString)
+            }
+          } else if (!isQuiet) {
             logger.success('Code executed successfully')
           }
         }
       )
     } catch (error: any) {
-      cmdContext.logger.error(`Execution failed: ${error.message}`)
+      // Log the error if not already logged
+      if (error.message && !error.message.includes('Command failed')) {
+        cmdContext.logger.error(error.message)
+      }
       throw new Error('Command failed')
     }
   },

@@ -62,7 +62,7 @@ export const networkCommand = createCommand<NetworkOptions>({
 
       const page = await BrowserHelper.getActivePage(argv.port)
       if (!page) {
-        throw new Error('No active page. Use "playwright open" first')
+        throw new Error('No active page. Use "pw open" first')
       }
 
       const requests: any[] = []

@@ -149,14 +149,6 @@ describe('Validators', () => {
       expect(result.sanitizedValue).toBe('.button')
     })
 
-    it('should accept ref format selectors', () => {
-      const validator = Validators.selector({ required: true })
-      const result = validator('[ref=abc123]', 'selector')
-
-      expect(result.isValid).toBe(true)
-      expect(result.errors).toHaveLength(0)
-      expect(result.sanitizedValue).toBe('[ref=abc123]')
-    })
 
     it('should reject empty selectors', () => {
       const validator = Validators.selector({ required: true })

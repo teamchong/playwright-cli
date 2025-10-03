@@ -1,6 +1,6 @@
 /**
  * Action History Tracker
- * 
+ *
  * Tracks user actions across commands for the context command to display.
  * Persists history to a temp file to maintain state between command runs.
  */
@@ -40,13 +40,13 @@ class ActionHistory {
       if (fs.existsSync(this.historyFile)) {
         const data = fs.readFileSync(this.historyFile, 'utf8')
         const parsed = JSON.parse(data)
-        
+
         // Convert timestamp strings back to Date objects and filter recent actions
         const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000) // 24 hours ago
         this.actions = parsed
           .map((action: any) => ({
             ...action,
-            timestamp: new Date(action.timestamp)
+            timestamp: new Date(action.timestamp),
           }))
           .filter((action: Action) => action.timestamp > cutoff)
           .slice(-this.maxActions)
@@ -68,33 +68,33 @@ class ActionHistory {
   addAction(action: Omit<Action, 'timestamp'>): void {
     this.actions.push({
       ...action,
-      timestamp: new Date()
+      timestamp: new Date(),
     })
-    
+
     // Keep only the most recent actions
     if (this.actions.length > this.maxActions) {
       this.actions = this.actions.slice(-this.maxActions)
     }
-    
+
     // Persist to file
     this.saveActions()
   }
 
   getRecentActions(count = 5, tabId?: string): Action[] {
     let filtered = this.actions
-    
+
     if (tabId) {
       filtered = this.actions.filter(a => a.tabId === tabId)
     }
-    
+
     return filtered.slice(-count)
   }
 
   getLastAction(tabId?: string): Action | undefined {
-    const actions = tabId 
+    const actions = tabId
       ? this.actions.filter(a => a.tabId === tabId)
       : this.actions
-    
+
     return actions[actions.length - 1]
   }
 
@@ -111,7 +111,7 @@ class ActionHistory {
 
   formatAction(action: Action): string {
     const timeAgo = this.getTimeAgo(action.timestamp)
-    
+
     switch (action.type) {
       case 'navigate':
         return `Navigated to ${action.target} (${timeAgo})`
@@ -134,7 +134,7 @@ class ActionHistory {
 
   private getTimeAgo(date: Date): string {
     const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000)
-    
+
     if (seconds < 60) return `${seconds}s ago`
     if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
     if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`

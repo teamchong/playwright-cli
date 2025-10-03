@@ -60,7 +60,7 @@ export const listCommand: CommandModule<{}, ListArgs> = {
     } catch (error: any) {
       if (error.message.includes('No browser running')) {
         logger.warn('No browser running')
-        logger.info('   Use "playwright open" to start a browser')
+        logger.info('   Use "pw open" to start a browser')
       } else {
         logger.commandError(`Failed to list pages: ${error.message}`)
       }

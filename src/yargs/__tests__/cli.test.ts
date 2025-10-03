@@ -13,7 +13,7 @@ describe('Yargs CLI Structure', () => {
   describe('CLI initialization', () => {
     it('should create a CLI instance with correct script name', () => {
       const yargsInstance = cli as any
-      expect(yargsInstance.$0).toBe('playwright')
+      expect(yargsInstance.$0).toBe('pw')
     })
 
     it('should have global options configured', async () => {

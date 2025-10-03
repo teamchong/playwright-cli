@@ -5,6 +5,11 @@ import { BrowserHelper } from '../../../lib/browser-helper'
 import { logger } from '../../../lib/logger'
 import { extractInteractiveElements } from '../../../lib/ref-utils'
 import { refManager } from '../../../lib/ref-manager'
+import {
+  injectVisualLabelsScript,
+  removeVisualLabelsScript,
+  injectHelperFunctionsScript
+} from '../../../lib/visual-labels'
 
 interface SnapshotArgs extends Arguments {
   'port': number
@@ -12,6 +17,7 @@ interface SnapshotArgs extends Arguments {
   'json'?: boolean
   'full'?: boolean
   'detailed'?: boolean
+  'visual'?: boolean
   'tab-index'?: number
   'tab-id'?: string
 }
@@ -58,6 +64,11 @@ export const snapshotCommand: CommandModule<{}, SnapshotArgs> = {
         describe: 'Show detailed form field information',
         type: 'boolean',
       })
+      .option('visual', {
+        describe: 'Inject visual A-Z labels onto the page elements',
+        type: 'boolean',
+        default: false,
+      })
       .option('tab-index', {
         describe: 'Target specific tab by index (0-based)',
         type: 'number',
@@ -75,11 +86,25 @@ export const snapshotCommand: CommandModule<{}, SnapshotArgs> = {
     const tabId = argv['tab-id'] as string | undefined
 
     try {
-      await BrowserHelper.withTargetPage(
-        argv.port,
-        tabIndex,
-        tabId,
-        async page => {
+      // Wrap the entire operation with the command timeout (defaults to 30s for capture commands)
+      const { withTimeout } = await import('../../../lib/timeout-utils')
+      await withTimeout(
+        BrowserHelper.withTargetPage(
+          argv.port,
+          tabIndex,
+          tabId,
+          async page => {
+          // Inject visual labels if requested
+          if (argv.visual) {
+            // First inject helper functions
+            await page.evaluate(injectHelperFunctionsScript)
+
+            // Then inject the visual labels
+            const labelCount = await page.evaluate(injectVisualLabelsScript)
+            logger.info(chalk.green(`✨ Injected ${labelCount} visual labels (A-Z style) onto page elements`))
+            logger.info(chalk.gray('Labels will remain visible until page is reloaded or labels are removed'))
+          }
+
           const snapshot = await page.accessibility.snapshot()
 
           if (argv.full) {
@@ -107,7 +132,7 @@ export const snapshotCommand: CommandModule<{}, SnapshotArgs> = {
           } else {
             // Show only interactive elements with refs (new default)
             const interactiveElements = extractInteractiveElements(snapshot)
-            
+
             // Store refs in RefManager for later use
             refManager.storeSnapshot(interactiveElements, tabId)
 
@@ -115,13 +140,19 @@ export const snapshotCommand: CommandModule<{}, SnapshotArgs> = {
             let detailedFormInfo: any = null
             if (argv.detailed) {
               detailedFormInfo = await page.evaluate(() => {
-                // @ts-expect-error - document is available in browser context
-                const forms = Array.from(document.querySelectorAll('form'));
-                // @ts-expect-error - document is available in browser context  
-                const inputs = Array.from(document.querySelectorAll('input, textarea, select'));
-                
+                const forms = Array.from(
+                  (globalThis as any).document.querySelectorAll('form')
+                )
+                const inputs = Array.from(
+                  (globalThis as any).document.querySelectorAll(
+                    'input, textarea, select'
+                  )
+                )
+
                 const formDetails = forms.map((form: any, index) => {
-                  const formInputs = Array.from(form.querySelectorAll('input, textarea, select'));
+                  const formInputs = Array.from(
+                    form.querySelectorAll('input, textarea, select')
+                  )
                   return {
                     index,
                     id: form.id || null,
@@ -135,30 +166,32 @@ export const snapshotCommand: CommandModule<{}, SnapshotArgs> = {
                       placeholder: input.placeholder || null,
                       value: input.value || null,
                       required: input.required || false,
-                      disabled: input.disabled || false
-                    }))
-                  };
-                });
-                
-                const standaloneInputs = inputs.filter((input: any) => !input.closest('form')).map((input: any) => ({
-                  type: input.type || input.tagName.toLowerCase(),
-                  name: input.name || null,
-                  id: input.id || null,
-                  placeholder: input.placeholder || null,
-                  value: input.value || null,
-                  required: input.required || false,
-                  disabled: input.disabled || false
-                }));
-                
+                      disabled: input.disabled || false,
+                    })),
+                  }
+                })
+
+                const standaloneInputs = inputs
+                  .filter((input: any) => !input.closest('form'))
+                  .map((input: any) => ({
+                    type: input.type || input.tagName.toLowerCase(),
+                    name: input.name || null,
+                    id: input.id || null,
+                    placeholder: input.placeholder || null,
+                    value: input.value || null,
+                    required: input.required || false,
+                    disabled: input.disabled || false,
+                  }))
+
                 return {
                   forms: formDetails,
-                  standaloneInputs
-                };
+                  standaloneInputs,
+                }
               })
             }
 
             if (argv.json) {
-              const output = argv.detailed 
+              const output = argv.detailed
                 ? { interactiveElements, detailedFormInfo }
                 : interactiveElements
               logger.info(JSON.stringify(output, null, 2))
@@ -180,31 +213,45 @@ export const snapshotCommand: CommandModule<{}, SnapshotArgs> = {
                           : chalk.white
 
                   const name = elem.name || '(no text)'
-                  
+
                   if (argv.detailed && elem.role === 'textbox') {
                     // Find matching detailed info for this input
-                    const matchingInput = detailedFormInfo?.standaloneInputs?.find((input: any) => 
-                      input.placeholder === elem.name || input.name === elem.name || input.id === elem.name
-                    ) || detailedFormInfo?.forms?.flatMap((form: any) => form.inputs)?.find((input: any) =>
-                      input.placeholder === elem.name || input.name === elem.name || input.id === elem.name
-                    )
-                    
+                    const matchingInput =
+                      detailedFormInfo?.standaloneInputs?.find(
+                        (input: any) =>
+                          input.placeholder === elem.name ||
+                          input.name === elem.name ||
+                          input.id === elem.name
+                      ) ||
+                      detailedFormInfo?.forms
+                        ?.flatMap((form: any) => form.inputs)
+                        ?.find(
+                          (input: any) =>
+                            input.placeholder === elem.name ||
+                            input.name === elem.name ||
+                            input.id === elem.name
+                        )
+
                     let details = ''
                     if (matchingInput) {
                       const parts = []
-                      if (matchingInput.type && matchingInput.type !== 'text') parts.push(`type=${matchingInput.type}`)
-                      if (matchingInput.name) parts.push(`name=${matchingInput.name}`)
+                      if (matchingInput.type && matchingInput.type !== 'text')
+                        parts.push(`type=${matchingInput.type}`)
+                      if (matchingInput.name)
+                        parts.push(`name=${matchingInput.name}`)
                       if (matchingInput.required) parts.push('required')
-                      if (matchingInput.value) parts.push(`value="${matchingInput.value}"`)
-                      if (parts.length > 0) details = chalk.gray(` (${parts.join(', ')})`)
+                      if (matchingInput.value)
+                        parts.push(`value="${matchingInput.value}"`)
+                      if (parts.length > 0)
+                        details = chalk.gray(` (${parts.join(', ')})`)
                     }
-                    
+
                     logger.info(
-                      `${roleColor(elem.role)} "${name}" ${chalk.gray(`[ref=${elem.ref}]`)}${details}`
+                      `${roleColor(elem.role)} "${name}" ${chalk.cyan(`[${elem.ref}]`)}${details}`
                     )
                   } else {
                     logger.info(
-                      `${roleColor(elem.role)} "${name}" ${chalk.gray(`[ref=${elem.ref}]`)}`
+                      `${roleColor(elem.role)} "${name}" ${chalk.cyan(`[${elem.ref}]`)}`
                     )
                   }
                 })
@@ -215,21 +262,28 @@ export const snapshotCommand: CommandModule<{}, SnapshotArgs> = {
                 logger.info('')
                 logger.info(chalk.blue('📋 Detailed Form Information:'))
                 logger.info(chalk.gray('─'.repeat(40)))
-                
-                if (detailedFormInfo.forms && detailedFormInfo.forms.length > 0) {
+
+                if (
+                  detailedFormInfo.forms &&
+                  detailedFormInfo.forms.length > 0
+                ) {
                   detailedFormInfo.forms.forEach((form: any, index: number) => {
                     logger.info(chalk.cyan(`Form ${index + 1}:`))
                     if (form.id) logger.info(`  ID: ${form.id}`)
                     if (form.action) logger.info(`  Action: ${form.action}`)
                     logger.info(`  Method: ${form.method}`)
                     logger.info(`  ${form.inputCount} input field(s):`)
-                    
+
                     form.inputs.forEach((input: any, inputIndex: number) => {
                       const statusIcon = input.value ? '✓' : '○'
                       const requiredFlag = input.required ? chalk.red(' *') : ''
-                      const disabledFlag = input.disabled ? chalk.gray(' (disabled)') : ''
-                      
-                      logger.info(`    ${statusIcon} ${input.type} "${input.placeholder || input.name || input.id || 'unnamed'}"${requiredFlag}${disabledFlag}`)
+                      const disabledFlag = input.disabled
+                        ? chalk.gray(' (disabled)')
+                        : ''
+
+                      logger.info(
+                        `    ${statusIcon} ${input.type} "${input.placeholder || input.name || input.id || 'unnamed'}"${requiredFlag}${disabledFlag}`
+                      )
                       if (input.value) {
                         logger.info(`      Current value: "${input.value}"`)
                       }
@@ -237,15 +291,22 @@ export const snapshotCommand: CommandModule<{}, SnapshotArgs> = {
                     logger.info('')
                   })
                 }
-                
-                if (detailedFormInfo.standaloneInputs && detailedFormInfo.standaloneInputs.length > 0) {
+
+                if (
+                  detailedFormInfo.standaloneInputs &&
+                  detailedFormInfo.standaloneInputs.length > 0
+                ) {
                   logger.info(chalk.cyan('Standalone Inputs (not in forms):'))
                   detailedFormInfo.standaloneInputs.forEach((input: any) => {
                     const statusIcon = input.value ? '✓' : '○'
                     const requiredFlag = input.required ? chalk.red(' *') : ''
-                    const disabledFlag = input.disabled ? chalk.gray(' (disabled)') : ''
-                    
-                    logger.info(`  ${statusIcon} ${input.type} "${input.placeholder || input.name || input.id || 'unnamed'}"${requiredFlag}${disabledFlag}`)
+                    const disabledFlag = input.disabled
+                      ? chalk.gray(' (disabled)')
+                      : ''
+
+                    logger.info(
+                      `  ${statusIcon} ${input.type} "${input.placeholder || input.name || input.id || 'unnamed'}"${requiredFlag}${disabledFlag}`
+                    )
                     if (input.value) {
                       logger.info(`    Current value: "${input.value}"`)
                     }
@@ -259,19 +320,28 @@ export const snapshotCommand: CommandModule<{}, SnapshotArgs> = {
                   `Found ${interactiveElements.length} interactive elements`
                 )
               )
-              
+
               if (argv.detailed) {
                 const totalForms = detailedFormInfo?.forms?.length || 0
-                const totalInputs = (detailedFormInfo?.forms?.reduce((sum: number, form: any) => sum + form.inputCount, 0) || 0) + 
-                                   (detailedFormInfo?.standaloneInputs?.length || 0)
-                logger.info(chalk.gray(`${totalForms} form(s), ${totalInputs} input field(s)`))
+                const totalInputs =
+                  (detailedFormInfo?.forms?.reduce(
+                    (sum: number, form: any) => sum + form.inputCount,
+                    0
+                  ) || 0) + (detailedFormInfo?.standaloneInputs?.length || 0)
+                logger.info(
+                  chalk.gray(
+                    `${totalForms} form(s), ${totalInputs} input field(s)`
+                  )
+                )
               }
             }
           }
         }
-      )
+      ),
+      argv.timeout,
+      'Snapshot command operation'
+    )
       // Exit cleanly
-
       return
     } catch (error: any) {
       logger.error(chalk.red(`❌ Failed to capture snapshot: ${error.message}`))

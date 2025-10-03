@@ -8,6 +8,9 @@ import {
   type Page,
   type BrowserContext,
 } from 'playwright'
+import { withTimeout, TimeoutError, retryWithBackoff } from './timeout-utils'
+import { BrowserTabRegistry } from './browser-tab-registry'
+import { CDPConnectionPool } from './cdp-connection-pool'
 
 /**
  * Helper class for managing Chrome browser connections and operations.
@@ -24,6 +27,7 @@ import {
 export class BrowserHelper {
   /**
    * Establishes a connection to a running Chrome browser via CDP.
+   * Uses a connection pool to reuse connections and avoid the hanging process issue.
    * Sets default timeout to 5 seconds for all operations.
    *
    * @param port - The Chrome debugging port (default: 9222)
@@ -38,22 +42,28 @@ export class BrowserHelper {
    */
   static async getBrowser(port: number = 9222): Promise<Browser> {
     try {
-      const browser = await chromium.connectOverCDP(`http://localhost:${port}`)
-      // Set default timeout to 5 seconds for all operations
-      browser.contexts().forEach(context => {
-        context.setDefaultTimeout(5000)
-      })
-      return browser
-    } catch (error: any) {
-      throw new Error(
-        `No browser running on port ${port}. Use "playwright open" first`
+      return await withTimeout(
+        (async () => {
+          const pool = CDPConnectionPool.getInstance()
+          return await pool.getConnection(port)
+        })(),
+        10000,
+        `Getting browser connection on port ${port}`
       )
+    } catch (error) {
+      if (error instanceof TimeoutError) {
+        throw new Error(
+          `Failed to get browser connection on port ${port}. ` +
+            `The browser may be unresponsive or not running.`
+        )
+      }
+      throw error
     }
   }
 
   /**
-   * Executes an action with a browser connection and automatically disconnects afterwards.
-   * Provides automatic cleanup to prevent connection leaks.
+   * Executes an action with a browser connection and automatically releases it back to the pool.
+   * Uses connection pooling to avoid the hanging process issue.
    *
    * @param port - The Chrome debugging port
    * @param action - Async function to execute with the browser instance
@@ -70,12 +80,8 @@ export class BrowserHelper {
     port: number,
     action: (browser: Browser) => Promise<T>
   ): Promise<T> {
-    const browser = await this.getBrowser(port)
-    try {
-      return await action(browser)
-    } finally {
-      await browser.close()
-    }
+    const pool = CDPConnectionPool.getInstance()
+    return await pool.withConnection(port, action)
   }
 
   /**
@@ -92,14 +98,15 @@ export class BrowserHelper {
    * ```
    */
   static async getPages(port: number = 9222): Promise<Page[]> {
-    const browser = await this.getBrowser(port)
-    const allPages: Page[] = []
+    return this.withBrowser(port, async browser => {
+      const allPages: Page[] = []
 
-    for (const context of browser.contexts()) {
-      allPages.push(...context.pages())
-    }
+      for (const context of browser.contexts()) {
+        allPages.push(...context.pages())
+      }
 
-    return allPages
+      return allPages
+    })
   }
 
   /**
@@ -128,17 +135,19 @@ export class BrowserHelper {
    * Retrieves the active page (first non-internal page).
    * Excludes chrome:// and about: pages, creates a new page if none found.
    *
-   * ⚠️  WARNING: This method keeps the browser connection open!
-   * Use withActivePage() for automatic cleanup.
+   * ⚠️  WARNING: This method acquires but does not release browser connection!
+   * Prefer withActivePage() for automatic cleanup to prevent connection leaks.
+   * Only use this if you need the page reference without immediate cleanup.
    *
    * @param port - The Chrome debugging port (default: 9222)
    * @returns Promise resolving to the active Page instance
    *
    * @example
    * ```typescript
+   * // ⚠️  NOT RECOMMENDED - Use withActivePage() instead
    * const page = await BrowserHelper.getActivePage(9222);
    * await page.goto('https://example.com');
-   * // Remember to close browser connection manually!
+   * // Connection leaked! Use withActivePage() for automatic cleanup.
    * ```
    */
   static async getActivePage(port: number = 9222): Promise<Page> {
@@ -185,29 +194,49 @@ export class BrowserHelper {
     port: number,
     action: (page: Page) => Promise<T>
   ): Promise<T> {
-    return this.withBrowser(port, async browser => {
-      // Find first non-internal page
-      for (const context of browser.contexts()) {
-        for (const page of context.pages()) {
-          const url = page.url()
-          if (!url.startsWith('chrome://') && !url.startsWith('about:')) {
-            return await action(page)
+    return withTimeout(
+      this.withBrowser(port, async browser => {
+        // Find first non-internal page
+        for (const context of browser.contexts()) {
+          for (const page of context.pages()) {
+            const url = page.url()
+            if (!url.startsWith('chrome://') && !url.startsWith('about:')) {
+              return await withTimeout(
+                action(page),
+                30000,
+                'Executing action on active page'
+              )
+            }
           }
         }
-      }
 
-      // If no active page, create one
-      const contexts = browser.contexts()
-      let page: Page
-      if (contexts.length > 0) {
-        page = await contexts[0].newPage()
-      } else {
-        const context = await browser.newContext()
-        context.setDefaultTimeout(5000) // Set 5s timeout for new context
-        page = await context.newPage()
-      }
-      return await action(page)
-    })
+        // If no active page, create one
+        const contexts = browser.contexts()
+        let page: Page
+        if (contexts.length > 0) {
+          page = await withTimeout(
+            contexts[0].newPage(),
+            5000,
+            'Creating new page in existing context'
+          )
+        } else {
+          const context = await withTimeout(
+            browser.newContext(),
+            5000,
+            'Creating new browser context'
+          )
+          context.setDefaultTimeout(5000) // Set 5s timeout for new context
+          page = await withTimeout(context.newPage(), 5000, 'Creating new page')
+        }
+        return await withTimeout(
+          action(page),
+          30000,
+          'Executing action on new page'
+        )
+      }),
+      35000,
+      'Active page operation'
+    )
   }
 
   /**
@@ -225,12 +254,60 @@ export class BrowserHelper {
    * ```
    */
   static async getPageId(page: Page): Promise<string> {
-    const cdp = await page.context().newCDPSession(page)
+    // Add timeout protection for CDP operations with proper cleanup
+    let timeoutId: NodeJS.Timeout | undefined
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('CDP operation timed out')), 2000)
+    })
+
+    let cdpSession = null
     try {
-      const targetInfo = await cdp.send('Target.getTargetInfo')
-      return targetInfo.targetInfo.targetId
-    } finally {
-      await cdp.detach()
+      cdpSession = await Promise.race([
+        page.context().newCDPSession(page),
+        timeoutPromise,
+      ])
+
+      clearTimeout(timeoutId) // Clear timeout on success
+      timeoutId = undefined
+
+      try {
+        let innerTimeoutId: NodeJS.Timeout | undefined
+        const innerTimeoutPromise = new Promise<never>((_, reject) => {
+          innerTimeoutId = setTimeout(() => reject(new Error('CDP operation timed out')), 2000)
+        })
+
+        const targetInfo = await Promise.race([
+          cdpSession.send('Target.getTargetInfo'),
+          innerTimeoutPromise,
+        ])
+
+        clearTimeout(innerTimeoutId) // Clear timeout on success
+        return targetInfo.targetInfo.targetId
+      } finally {
+        // Ensure CDP session is properly detached
+        if (cdpSession) {
+          await cdpSession.detach().catch(() => {}) // Ignore detach errors
+        }
+      }
+    } catch (error) {
+      // Clear timeout if still active
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId)
+      }
+
+      // Cleanup CDP session if it was created before the error
+      if (cdpSession) {
+        try {
+          await cdpSession.detach().catch(() => {})
+        } catch {}
+      }
+
+      // If CDP fails, fallback to page URL as ID (less reliable but won't hang)
+      console.warn('CDP getPageId failed, using URL hash as fallback:', error)
+      const url = page.url()
+      // Generate a pseudo-ID from URL
+      const crypto = require('crypto')
+      return crypto.createHash('md5').update(url).digest('hex').toUpperCase()
     }
   }
 
@@ -251,21 +328,59 @@ export class BrowserHelper {
    * ```
    */
   static async findPageById(port: number, tabId: string): Promise<Page | null> {
-    const pages = await this.getPages(port)
+    // Quick validation: CDP tab IDs are uppercase hex strings (32 chars)
+    // If the format is clearly wrong, fail fast
+    if (!/^[0-9A-F]{32}$/i.test(tabId)) {
+      console.debug(`Tab ID "${tabId}" doesn't match CDP format, skipping search`)
+      return null
+    }
 
-    for (const page of pages) {
+    return this.withBrowser(port, async browser => {
+      // Try fast lookup using browser registry first
       try {
-        const pageId = await this.getPageId(page)
-        if (pageId === tabId) {
+        const page = await BrowserTabRegistry.findPageById(browser, tabId)
+        if (page) {
           return page
         }
       } catch (error) {
-        // Skip this page if we can't get its ID
-        continue
+        console.debug('Browser registry lookup failed, falling back to CDP scan:', error)
       }
-    }
 
-    return null
+      // Fallback to original CDP scanning method
+      const allPages: Page[] = []
+      for (const context of browser.contexts()) {
+        allPages.push(...context.pages())
+      }
+
+      // Check recent pages only - most lookups are for recent tabs
+      const maxPagesToCheck = 10 // Reduced from 30 for faster failure
+      const recentPages = allPages.slice(-maxPagesToCheck) // Get last N pages
+
+      // Check pages in parallel for much faster lookup
+      const checkPromises = recentPages.map(async (page, index) => {
+        try {
+          const pageId = await withTimeout(
+            this.getPageId(page),
+            100, // 100ms per page should be enough
+            `Getting page ID for page ${index}`
+          )
+          return { page, pageId }
+        } catch (error) {
+          return { page: null, pageId: null }
+        }
+      })
+
+      const results = await Promise.all(checkPromises)
+
+      // Find matching page
+      for (const result of results) {
+        if (result.pageId === tabId && result.page) {
+          return result.page
+        }
+      }
+
+      return null
+    })
   }
 
   /**
@@ -316,32 +431,68 @@ export class BrowserHelper {
       return this.withActivePage(port, action)
     }
 
-    return this.withBrowser(port, async browser => {
-      let targetPage: Page | null = null
+    // Wrap the entire operation with timeout protection
+    const operation = async () => {
+      return this.withBrowser(port, async (browser) => {
+        let targetPage: Page | null = null
 
-      if (tabId !== undefined) {
-        // Find by unique ID
-        targetPage = await this.findPageById(port, tabId)
-        if (!targetPage) {
-          throw new Error(`Tab with ID "${tabId}" not found`)
-        }
-      } else if (tabIndex !== undefined) {
-        // Find by index
-        const pages = await this.getPages(port)
-        if (tabIndex < 0 || tabIndex >= pages.length) {
-          throw new Error(
-            `Tab index ${tabIndex} is out of bounds. Available tabs: 0-${pages.length - 1}`
+        if (tabId !== undefined) {
+          // Find by unique ID with timeout
+          try {
+            targetPage = await withTimeout(
+              this.findPageById(port, tabId),
+              5000,
+              `Finding tab with ID ${tabId}`
+            )
+            if (!targetPage) {
+              // This is not a timeout but a legitimate "not found"
+              throw new Error(`Tab with ID "${tabId}" not found`)
+            }
+          } catch (error) {
+            if (error instanceof TimeoutError) {
+              throw new Error(
+                `Timeout finding tab with ID "${tabId}". The tab may not exist or the browser is unresponsive.`
+              )
+            }
+            throw error
+          }
+        } else if (tabIndex !== undefined) {
+          // Find by index with timeout
+          const pages = await withTimeout(
+            this.getPages(port),
+            3000,
+            'Getting page list'
           )
+          if (tabIndex < 0 || tabIndex >= pages.length) {
+            throw new Error(
+              `Tab index ${tabIndex} is out of bounds. Available tabs: 0-${pages.length - 1}`
+            )
+          }
+          targetPage = pages[tabIndex]
         }
-        targetPage = pages[tabIndex]
-      }
 
-      if (!targetPage) {
-        throw new Error('Unable to find target page')
-      }
+        if (!targetPage) {
+          throw new Error('Unable to find target page')
+        }
 
-      return await action(targetPage)
-    })
+        // Execute the action with timeout protection
+        // Add a small delay to allow Chrome event loop to process
+        await new Promise(resolve => setImmediate(resolve))
+        const result = await withTimeout(
+          action(targetPage),
+          30000, // 30 second timeout for the actual action
+          'Executing page action'
+        )
+        return result
+      })
+    }
+
+    // Add overall timeout protection for the entire operation
+    return withTimeout(
+      operation(),
+      35000, // 35 seconds total (slightly more than inner timeout)
+      'Page operation'
+    )
   }
 
   /**
@@ -358,8 +509,9 @@ export class BrowserHelper {
    * ```
    */
   static async getContexts(port: number = 9222): Promise<BrowserContext[]> {
-    const browser = await this.getBrowser(port)
-    return browser.contexts()
+    return this.withBrowser(port, async browser => {
+      return browser.contexts()
+    })
   }
 
   /**
@@ -456,6 +608,11 @@ export class BrowserHelper {
       `--user-data-dir=${os.tmpdir()}/playwright-chrome-${port}`,
     ]
 
+    // Add headless mode for tests
+    if (process.env.PLAYWRIGHT_CLI_HEADLESS === 'true') {
+      args.push('--headless=new')
+    }
+
     if (url) {
       args.push(url)
     }
@@ -468,8 +625,26 @@ export class BrowserHelper {
     // Unref the child process so the parent can exit
     child.unref()
 
-    // Wait for browser to start
-    await new Promise(resolve => setTimeout(resolve, 1500))
+    // Wait for CDP server to be ready (with retries)
+    const maxRetries = 20 // 20 retries = 10 seconds max
+    const retryDelay = 500 // 500ms between retries
+
+    for (let i = 0; i < maxRetries; i++) {
+      await new Promise(resolve => setTimeout(resolve, retryDelay))
+
+      // Check if CDP is ready by testing the port
+      const isReady = await this.isPortOpen(port)
+      if (isReady) {
+        // Port is open, but give CDP server a moment to fully initialize
+        await new Promise(resolve => setTimeout(resolve, 300))
+        return
+      }
+    }
+
+    // If we get here, browser didn't start in time
+    throw new Error(
+      `Browser launched but CDP server not ready on port ${port} after ${maxRetries * retryDelay}ms`
+    )
   }
 
   /**

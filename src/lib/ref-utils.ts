@@ -1,24 +1,49 @@
-import { createHash } from 'crypto'
+/**
+ * Converts a number to Excel-style column notation (A, B, C... AA, AB, etc.)
+ * @param num - Zero-based index
+ * @returns Excel-style column string
+ */
+export function numberToExcelColumn(num: number): string {
+  let column = ''
+  let n = num
+
+  while (n >= 0) {
+    column = String.fromCharCode(65 + (n % 26)) + column
+    n = Math.floor(n / 26) - 1
+    if (n < 0) break
+  }
+
+  return column
+}
+
+// Global counter for generating sequential labels
+let labelCounter = 0
 
 /**
- * Generates a deterministic reference identifier from element properties.
- * Same element will always produce the same ref across multiple calls.
- * Uses MD5 hashing for consistent 6-character identifiers.
+ * Resets the label counter (useful for new pages or snapshots)
+ */
+export function resetLabelCounter(): void {
+  labelCounter = 0
+}
+
+/**
+ * Generates a sequential A-Z style reference identifier.
+ * Returns A, B, C... Z, AA, AB, etc. in order.
  *
- * @param node - The accessibility tree node
- * @param path - The element's path in the tree (default: '')
- * @returns A 6-character hash string as the element reference
+ * @param node - The accessibility tree node (unused but kept for compatibility)
+ * @param path - The element's path in the tree (unused but kept for compatibility)
+ * @returns An Excel-style column string as the element reference
  *
  * @example
  * ```typescript
  * const node = { role: 'button', name: 'Submit', value: '' };
- * const ref = generateRef(node, 'root-0-1'); // Returns: 'a1b2c3'
+ * const ref = generateRef(node, 'root-0-1'); // Returns: 'A' (first call), 'B' (second call), etc.
  * ```
  */
 export function generateRef(node: any, path: string = ''): string {
-  const content = `${path}-${node.role}-${node.name || ''}-${node.value || ''}`
-  const hash = createHash('md5').update(content).digest('hex')
-  return hash.substring(0, 6)
+  const ref = numberToExcelColumn(labelCounter)
+  labelCounter++
+  return ref
 }
 
 /**
@@ -69,17 +94,18 @@ export function isInteractive(node: any): boolean {
 
 /**
  * Searches for an element in the accessibility tree by its reference identifier.
- * Performs a depth-first search through the tree structure.
+ * Since we now use sequential A-Z labels, we need to traverse and count
+ * interactive elements to find the matching one.
  *
  * @param node - The root node to start searching from
- * @param targetRef - The 6-character reference identifier to find
+ * @param targetRef - The A-Z style reference identifier to find
  * @param path - Current path in the tree traversal (default: '')
  * @returns The matching node or null if not found
  *
  * @example
  * ```typescript
  * const tree = { role: 'main', children: [{ role: 'button', name: 'Submit' }] };
- * const element = findElementByRef(tree, 'a1b2c3');
+ * const element = findElementByRef(tree, 'A');
  * if (element) {
  *   console.log(`Found: ${element.role} - ${element.name}`);
  * }
@@ -90,20 +116,35 @@ export function findElementByRef(
   targetRef: string,
   path: string = ''
 ): any {
+  // Extract all interactive elements with their refs
+  const elements = extractInteractiveElements(node)
+
+  // Find the element with matching ref
+  const targetElement = elements.find(elem => elem.ref === targetRef)
+
+  if (!targetElement) return null
+
+  // Now find the actual node in the tree that matches this element
+  return findNodeByProperties(node, targetElement)
+}
+
+/**
+ * Helper function to find a node by its properties
+ */
+function findNodeByProperties(node: any, target: any): any {
   if (!node) return null
 
-  const currentRef = generateRef(node, path)
-  if (currentRef === targetRef) {
+  // Check if current node matches
+  if (node.role === target.role &&
+      (node.name === target.name || node.value === target.name) &&
+      node.description === target.description) {
     return node
   }
 
+  // Recurse through children
   if (node.children) {
-    for (let i = 0; i < node.children.length; i++) {
-      const found = findElementByRef(
-        node.children[i],
-        targetRef,
-        `${path}-${i}`
-      )
+    for (const child of node.children) {
+      const found = findNodeByProperties(child, target)
       if (found) return found
     }
   }
@@ -189,8 +230,8 @@ export function nodeToSelector(node: any): string {
  *
  * const interactive = extractInteractiveElements(tree);
  * // Returns: [
- * //   { role: 'button', name: 'Submit', ref: 'abc123', description: 'Submit the form' },
- * //   { role: 'link', name: 'Home', ref: 'def456', description: 'Go to homepage' }
+ * //   { role: 'button', name: 'Submit', ref: 'A', description: 'Submit the form' },
+ * //   { role: 'link', name: 'Home', ref: 'B', description: 'Go to homepage' }
  * // ]
  * ```
  */
@@ -199,6 +240,11 @@ export function extractInteractiveElements(
   path: string = '',
   results: any[] = []
 ): any[] {
+  // Reset counter when starting fresh (empty results array)
+  if (results.length === 0) {
+    resetLabelCounter()
+  }
+
   if (!node) return results
 
   // Add current node if interactive

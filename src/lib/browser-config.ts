@@ -9,8 +9,15 @@ import { logger } from './logger'
 import { PlatformHelper } from './platform-helper'
 
 const OLD_CONFIG_FILE = join(homedir(), '.playwright-cli-config.json')
-const CLAUDE_DIR = PlatformHelper.getClaudeDir()
-const CONFIG_FILE = join(CLAUDE_DIR, 'playwright-config.json')
+
+// Helper functions to get paths dynamically (so they can be mocked in tests)
+function getClaudeDir() {
+  return PlatformHelper.getClaudeDir()
+}
+
+function getConfigFile() {
+  return join(getClaudeDir(), 'playwright-config.json')
+}
 
 export type BrowserType = 'chromium' | 'firefox' | 'webkit'
 
@@ -33,8 +40,9 @@ export class BrowserConfig {
 
     try {
       // Try new location first
-      if (existsSync(CONFIG_FILE)) {
-        const data = readFileSync(CONFIG_FILE, 'utf-8')
+      const configFile = getConfigFile()
+      if (existsSync(configFile)) {
+        const data = readFileSync(configFile, 'utf-8')
         this.config = JSON.parse(data)
         return this.config!
       }
@@ -69,7 +77,7 @@ export class BrowserConfig {
     // Ensure Claude directory exists
     PlatformHelper.getOrCreateClaudeDir()
 
-    writeFileSync(CONFIG_FILE, JSON.stringify(this.config, null, 2))
+    writeFileSync(getConfigFile(), JSON.stringify(this.config, null, 2))
   }
 
   static async checkBrowsersInstalled(): Promise<boolean> {

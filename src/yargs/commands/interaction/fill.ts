@@ -119,12 +119,17 @@ export const fillCommand = createCommand<FillWithRefOptions>({
     let formScope = argv.form as string | undefined
     const quiet = argv.quiet as boolean
     const json = argv.json as boolean
-    
+
     // Auto-prepend # to form scope if it's just an ID
-    if (formScope && !formScope.startsWith('#') && !formScope.startsWith('.') && !formScope.includes(' ')) {
+    if (
+      formScope &&
+      !formScope.startsWith('#') &&
+      !formScope.startsWith('.') &&
+      !formScope.includes(' ')
+    ) {
       formScope = `#${formScope}`
     }
-    
+
     // Handle --ref mode (single field fill)
     if (ref) {
       const storedSelector = refManager.getSelector(ref, tabId)
@@ -133,24 +138,24 @@ export const fillCommand = createCommand<FillWithRefOptions>({
         logger.error(chalk.red(`❌ ${errorMsg}`))
         throw new Error(errorMsg)
       }
-      
+
       const value = fields![0] // We checked in validation that exactly one value is provided
-      
+
       await BrowserHelper.withTargetPage(port, tabIndex, tabId, async page => {
         try {
           await page.fill(storedSelector, value, { timeout: timeout as number })
-          
+
           // Track the fill action
           actionHistory.addAction({
             type: 'fill',
             target: storedSelector,
             value: value,
-            tabId: tabId
+            tabId: tabId,
           })
-          
-          logger.success(`Filled [ref=${ref}] with "${value}"`)
+
+          logger.success(`Filled [${ref}] with "${value}"`)
         } catch (err: any) {
-          logger.error(`Failed to fill [ref=${ref}]: ${err.message}`)
+          logger.error(`Failed to fill [${ref}]: ${err.message}`)
           throw err
         }
       })
@@ -170,25 +175,34 @@ export const fillCommand = createCommand<FillWithRefOptions>({
 
     let filledCount = 0
     const errors: string[] = []
-    const results: Array<{ field: string; value: string; success: boolean; error?: string }> = []
+    const results: Array<{
+      field: string
+      value: string
+      success: boolean
+      error?: string
+    }> = []
 
     // Detect legacy vs enhanced syntax
     const hasEqualsFields = fields!.some(field => field.includes('='))
-    const isLegacySyntax = !hasEqualsFields && fields!.length >= 2 && fields!.length % 2 === 0
+    const isLegacySyntax =
+      !hasEqualsFields && fields!.length >= 2 && fields!.length % 2 === 0
 
     // Get available field names for suggestions
     let availableFields: string[] = []
-    
+
     await BrowserHelper.withTargetPage(port, tabIndex, tabId, async page => {
       // Collect available fields for suggestions
       try {
         availableFields = await page.evaluate(() => {
-          // @ts-expect-error - document is available in browser context
-          const inputs = Array.from(document.querySelectorAll('input, textarea, select'))
+          const inputs = Array.from(
+            (globalThis as any).document.querySelectorAll(
+              'input, textarea, select'
+            )
+          )
           const fieldNames: string[] = []
           inputs.forEach((input: any) => {
             if (input.name) fieldNames.push(input.name)
-            if (input.id) fieldNames.push(input.id)  
+            if (input.id) fieldNames.push(input.id)
             if (input.placeholder) fieldNames.push(input.placeholder)
           })
           // Also get labels
@@ -203,24 +217,24 @@ export const fillCommand = createCommand<FillWithRefOptions>({
       } catch {
         // Ignore errors in getting field names
       }
-      
+
       if (isLegacySyntax) {
         // Legacy syntax: fill "selector" "value" "selector2" "value2"
         for (let i = 0; i < fields!.length; i += 2) {
           const selector = fields![i]
           const value = fields![i + 1]
-          
+
           try {
             await page.fill(selector, value, { timeout: timeout as number })
-            
+
             // Track the fill action
             actionHistory.addAction({
               type: 'fill',
               target: selector,
               value: value,
-              tabId: tabId
+              tabId: tabId,
             })
-            
+
             if (!quiet && !json) {
               console.log(`  ✓ Filled ${selector} with "${value}"`)
             }
@@ -229,7 +243,12 @@ export const fillCommand = createCommand<FillWithRefOptions>({
           } catch (err: any) {
             const errorMsg = `Failed to fill ${selector}: ${err.message}`
             errors.push(errorMsg)
-            results.push({ field: selector, value, success: false, error: err.message })
+            results.push({
+              field: selector,
+              value,
+              success: false,
+              error: err.message,
+            })
             if (!quiet && !json) {
               console.log(`  ⚠️  ${errorMsg}`)
             }
@@ -242,194 +261,244 @@ export const fillCommand = createCommand<FillWithRefOptions>({
           if (!field.includes('=')) {
             const errorMsg = `invalid format: ${field}. Use selector=value`
             errors.push(errorMsg)
-            results.push({ field, value: '', success: false, error: 'invalid format' })
+            results.push({
+              field,
+              value: '',
+              success: false,
+              error: 'invalid format',
+            })
             if (!quiet && !json) {
               console.log(`  ⚠️  ${errorMsg}`)
             }
             continue
           }
-        
-        // Handle CSS attribute selectors like [name=username]=value correctly
-        let selectorPart: string
-        let value: string
-        
-        if (field.startsWith('[') && field.includes(']=')) {
-          // CSS attribute selector: [name=username]=value
-          const closeBracketIndex = field.indexOf(']=')
-          selectorPart = field.substring(0, closeBracketIndex + 1) // Include the closing ]
-          value = field.substring(closeBracketIndex + 2) // Skip ]=
-        } else {
-          // Regular selector: #id=value or .class=value
-          const [selector, ...valueParts] = field.split('=')
-          selectorPart = selector
-          value = valueParts.join('=') // Handle values with = in them
-        }
 
-        if (!selectorPart) {
-          const errorMsg = `invalid format: ${field}. Use selector=value`
-          errors.push(errorMsg)
-          results.push({ field, value: '', success: false, error: 'invalid format' })
-          if (!quiet && !json) {
-            console.log(`  ⚠️  ${errorMsg}`)
-          }
-          continue
-        }
+          // Handle CSS attribute selectors like [name=username]=value correctly
+          let selectorPart: string
+          let value: string
 
-        try {
-          let actualSelector = selectorPart
-          let strategy = 'direct'
-          let localFormScope = formScope || ''
-          
-          // Check if selector has inline form scoping (e.g., "#registration-form email")
-          const parts = selectorPart.trim().split(/\s+/)
-          if (parts.length === 2 && (parts[0].startsWith('#') || parts[0].startsWith('.'))) {
-            localFormScope = parts[0]
-            actualSelector = parts[1]
+          if (field.startsWith('[') && field.includes(']=')) {
+            // CSS attribute selector: [name=username]=value
+            const closeBracketIndex = field.indexOf(']=')
+            selectorPart = field.substring(0, closeBracketIndex + 1) // Include the closing ]
+            value = field.substring(closeBracketIndex + 2) // Skip ]=
+          } else {
+            // Regular selector: #id=value or .class=value
+            const [selector, ...valueParts] = field.split('=')
+            selectorPart = selector
+            value = valueParts.join('=') // Handle values with = in them
           }
-          
-          // Skip attribute selector fixing - let CSS parser handle it
-          // The field=value parsing should have already separated the selector from the value
-          
-          // For simple identifiers (no CSS selector syntax), try field-specific resolution
-          if (!actualSelector.startsWith('#') && !actualSelector.startsWith('.') && !actualSelector.startsWith('[')) {
-            // Try to find form field by various attributes
-            const fieldSelectors = [
-              `[name="${actualSelector}"]`,        // by name attribute
-              `#${actualSelector}`,                 // by id
-              `[placeholder*="${actualSelector}" i]`, // by placeholder (case-insensitive)
-              `input[aria-label*="${actualSelector}" i]`, // by aria-label
-            ]
-            
-            // Add form scope if provided
-            if (localFormScope) {
-              for (let i = 0; i < fieldSelectors.length; i++) {
-                fieldSelectors[i] = `${localFormScope} ${fieldSelectors[i]}`
-              }
+
+          if (!selectorPart) {
+            const errorMsg = `invalid format: ${field}. Use selector=value`
+            errors.push(errorMsg)
+            results.push({
+              field,
+              value: '',
+              success: false,
+              error: 'invalid format',
+            })
+            if (!quiet && !json) {
+              console.log(`  ⚠️  ${errorMsg}`)
             }
-            
-            let found = false
-            for (const fieldSelector of fieldSelectors) {
-              try {
-                const element = await page.$(fieldSelector)
-                if (element) {
-                  actualSelector = fieldSelector
-                  strategy = fieldSelector.includes('[name=') ? 'name' : 
-                            fieldSelector.includes('#') && !fieldSelector.includes(' #') ? 'id' :
-                            fieldSelector.includes('placeholder') ? 'placeholder' : 'aria-label'
-                  found = true
-                  break
-                }
-              } catch {
-                // Continue to next selector
-              }
+            continue
+          }
+
+          try {
+            let actualSelector = selectorPart
+            let strategy = 'direct'
+            let localFormScope = formScope || ''
+
+            // Check if selector has inline form scoping (e.g., "#registration-form email")
+            const parts = selectorPart.trim().split(/\s+/)
+            if (
+              parts.length === 2 &&
+              (parts[0].startsWith('#') || parts[0].startsWith('.'))
+            ) {
+              localFormScope = parts[0]
+              actualSelector = parts[1]
             }
-            
-            // If still not found, try finding by label text
-            if (!found) {
-              try {
-                // Try to find label with exact text match first
-                const labelSelector = localFormScope ? 
-                  `${localFormScope} label:text("${actualSelector}")` : 
-                  `label:text("${actualSelector}")`
-                const labelElement = await page.$(labelSelector)
-                if (labelElement) {
-                  const forAttr = await labelElement.getAttribute('for')
-                  if (forAttr) {
-                    actualSelector = localFormScope ? `${localFormScope} #${forAttr}` : `#${forAttr}`
-                    strategy = 'label'
-                    found = true
-                  }
+
+            // Skip attribute selector fixing - let CSS parser handle it
+            // The field=value parsing should have already separated the selector from the value
+
+            // For simple identifiers (no CSS selector syntax), try field-specific resolution
+            if (
+              !actualSelector.startsWith('#') &&
+              !actualSelector.startsWith('.') &&
+              !actualSelector.startsWith('[')
+            ) {
+              // Try to find form field by various attributes
+              const fieldSelectors = [
+                `[name="${actualSelector}"]`, // by name attribute
+                `#${actualSelector}`, // by id
+                `[placeholder*="${actualSelector}" i]`, // by placeholder (case-insensitive)
+                `input[aria-label*="${actualSelector}" i]`, // by aria-label
+              ]
+
+              // Add form scope if provided
+              if (localFormScope) {
+                for (let i = 0; i < fieldSelectors.length; i++) {
+                  fieldSelectors[i] = `${localFormScope} ${fieldSelectors[i]}`
                 }
-              } catch {
-                // Try contains text as fallback
+              }
+
+              let found = false
+              for (const fieldSelector of fieldSelectors) {
                 try {
-                  const labelSelector = localFormScope ?
-                    `${localFormScope} label:has-text("${actualSelector}")` :
-                    `label:has-text("${actualSelector}")`
+                  const element = await page.$(fieldSelector)
+                  if (element) {
+                    actualSelector = fieldSelector
+                    strategy = fieldSelector.includes('[name=')
+                      ? 'name'
+                      : fieldSelector.includes('#') &&
+                          !fieldSelector.includes(' #')
+                        ? 'id'
+                        : fieldSelector.includes('placeholder')
+                          ? 'placeholder'
+                          : 'aria-label'
+                    found = true
+                    break
+                  }
+                } catch {
+                  // Continue to next selector
+                }
+              }
+
+              // If still not found, try finding by label text
+              if (!found) {
+                try {
+                  // Try to find label with exact text match first
+                  const labelSelector = localFormScope
+                    ? `${localFormScope} label:text("${actualSelector}")`
+                    : `label:text("${actualSelector}")`
                   const labelElement = await page.$(labelSelector)
                   if (labelElement) {
                     const forAttr = await labelElement.getAttribute('for')
                     if (forAttr) {
-                      actualSelector = localFormScope ? `${localFormScope} #${forAttr}` : `#${forAttr}`
+                      actualSelector = localFormScope
+                        ? `${localFormScope} #${forAttr}`
+                        : `#${forAttr}`
                       strategy = 'label'
                       found = true
                     }
                   }
                 } catch {
-                  // Fall back to text-based selector resolution
+                  // Try contains text as fallback
+                  try {
+                    const labelSelector = localFormScope
+                      ? `${localFormScope} label:has-text("${actualSelector}")`
+                      : `label:has-text("${actualSelector}")`
+                    const labelElement = await page.$(labelSelector)
+                    if (labelElement) {
+                      const forAttr = await labelElement.getAttribute('for')
+                      if (forAttr) {
+                        actualSelector = localFormScope
+                          ? `${localFormScope} #${forAttr}`
+                          : `#${forAttr}`
+                        strategy = 'label'
+                        found = true
+                      }
+                    }
+                  } catch {
+                    // Fall back to text-based selector resolution
+                  }
+                }
+              }
+
+              // If no field-specific match found, try text-based selector resolution
+              if (!found) {
+                const textSelectorResult = await findBestSelector(
+                  page,
+                  actualSelector
+                )
+                if (textSelectorResult) {
+                  actualSelector = localFormScope
+                    ? `${localFormScope} ${textSelectorResult.selector}`
+                    : textSelectorResult.selector
+                  strategy = textSelectorResult.strategy
+                } else {
+                  // If not a CSS selector and no element found by text, throw clear error
+                  const isCss =
+                    /^[#.]/.test(actualSelector) ||
+                    /[.\[\]\>\+\~:]/.test(actualSelector) ||
+                    /^[a-z]+$/i.test(actualSelector)
+                  if (!isCss) {
+                    throw new Error(
+                      `Element not found by text: "${actualSelector}". Try using a CSS selector or check the page content with 'snapshot'.`
+                    )
+                  }
                 }
               }
             }
-            
-            // If no field-specific match found, try text-based selector resolution
-            if (!found) {
-              const textSelectorResult = await findBestSelector(page, actualSelector)
-              if (textSelectorResult) {
-                actualSelector = localFormScope ? 
-                  `${localFormScope} ${textSelectorResult.selector}` : 
-                  textSelectorResult.selector
-                strategy = textSelectorResult.strategy
-              } else {
-                // If not a CSS selector and no element found by text, throw clear error
-                const isCss = /^[#.]/.test(actualSelector) || /[.\[\]\>\+\~:]/.test(actualSelector) || /^[a-z]+$/i.test(actualSelector)
-                if (!isCss) {
-                  throw new Error(`Element not found by text: "${actualSelector}". Try using a CSS selector or check the page content with 'snapshot'.`)
-                }
+
+            if (spinner) {
+              spinner.text = `Filling field via ${strategy}: ${selectorPart}...`
+            }
+
+            // Check if element exists before trying to fill
+            const element = await page.$(actualSelector)
+            if (!element) {
+              throw new Error(`not found: ${actualSelector}`)
+            }
+
+            await page.fill(actualSelector, value, {
+              timeout: timeout as number,
+            })
+
+            // Track the fill action
+            actionHistory.addAction({
+              type: 'fill',
+              target: selectorPart,
+              value: value,
+              tabId: tabId,
+            })
+
+            if (!quiet && !json) {
+              console.log(`  ✓ Filled ${selectorPart} with "${value}"`)
+            }
+            results.push({ field: selectorPart, value, success: true })
+            filledCount++
+          } catch (err: any) {
+            let errorMsg = err.message
+
+            // Add suggestions for field not found errors
+            if (
+              errorMsg.includes('Timeout') ||
+              errorMsg.includes('not found')
+            ) {
+              const suggestions = availableFields
+                .map(field => ({
+                  field,
+                  distance: levenshteinDistance(
+                    selectorPart.toLowerCase(),
+                    field.toLowerCase()
+                  ),
+                }))
+                .filter(s => s.distance <= 3) // Only suggest if reasonably close
+                .sort((a, b) => a.distance - b.distance)
+                .slice(0, 3)
+                .map(s => s.field)
+
+              if (suggestions.length > 0) {
+                errorMsg += `. Did you mean: ${suggestions.join(', ')}?`
               }
             }
-          }
-          
-          if (spinner) {
-            spinner.text = `Filling field via ${strategy}: ${selectorPart}...`
-          }
-          
-          // Check if element exists before trying to fill
-          const element = await page.$(actualSelector)
-          if (!element) {
-            throw new Error(`not found: ${actualSelector}`)
-          }
-          
-          await page.fill(actualSelector, value, { timeout: timeout as number })
-          
-          // Track the fill action
-          actionHistory.addAction({
-            type: 'fill',
-            target: selectorPart,
-            value: value,
-            tabId: tabId
-          })
-          
-          if (!quiet && !json) {
-            console.log(`  ✓ Filled ${selectorPart} with "${value}"`)
-          }
-          results.push({ field: selectorPart, value, success: true })
-          filledCount++
-        } catch (err: any) {
-          let errorMsg = err.message
-          
-          // Add suggestions for field not found errors
-          if (errorMsg.includes('Timeout') || errorMsg.includes('not found')) {
-            const suggestions = availableFields
-              .map(field => ({ field, distance: levenshteinDistance(selectorPart.toLowerCase(), field.toLowerCase()) }))
-              .filter(s => s.distance <= 3) // Only suggest if reasonably close
-              .sort((a, b) => a.distance - b.distance)
-              .slice(0, 3)
-              .map(s => s.field)
-            
-            if (suggestions.length > 0) {
-              errorMsg += `. Did you mean: ${suggestions.join(', ')}?`
+
+            const fullErrorMsg = `Failed to fill ${selectorPart}: ${errorMsg}`
+            errors.push(fullErrorMsg)
+            results.push({
+              field: selectorPart,
+              value,
+              success: false,
+              error: errorMsg,
+            })
+
+            // Display error immediately for better visibility
+            if (!quiet && !json) {
+              console.log(`  ⚠️  ${fullErrorMsg}`)
             }
           }
-          
-          const fullErrorMsg = `Failed to fill ${selectorPart}: ${errorMsg}`
-          errors.push(fullErrorMsg)
-          results.push({ field: selectorPart, value, success: false, error: errorMsg })
-          
-          // Display error immediately for better visibility
-          if (!quiet && !json) {
-            console.log(`  ⚠️  ${fullErrorMsg}`)
-          }
-        }
         }
       }
     })
@@ -439,24 +508,33 @@ export const fillCommand = createCommand<FillWithRefOptions>({
       // JSON output - match test expectations
       const filledFields = results.filter(r => r.success).map(r => r.field)
       const failedFields = results.filter(r => !r.success).map(r => r.field)
-      
-      console.log(JSON.stringify({
-        success: errors.length === 0,
-        filled: filledFields,
-        failed: failedFields,
-        total: fields!.length,
-        results
-      }, null, 2))
+
+      console.log(
+        JSON.stringify(
+          {
+            success: errors.length === 0,
+            filled: filledFields,
+            failed: failedFields,
+            total: fields!.length,
+            results,
+          },
+          null,
+          2
+        )
+      )
     } else if (!quiet) {
       // Report summary - use proper pluralization
-      const actualFieldCount = isLegacySyntax ? fields!.length / 2 : fields!.length
+      const actualFieldCount = isLegacySyntax
+        ? fields!.length / 2
+        : fields!.length
       const fieldWord = actualFieldCount === 1 ? 'field' : 'fields'
-      const summaryMsg = filledCount === actualFieldCount ? 
-        `filled ${filledCount} ${fieldWord}${tabTarget}` :
-        filledCount === 0 ?
-        `Failed to fill any ${fieldWord}${tabTarget}` :
-        `filled ${filledCount} of ${actualFieldCount} ${fieldWord}${tabTarget}`
-      
+      const summaryMsg =
+        filledCount === actualFieldCount
+          ? `filled ${filledCount} ${fieldWord}${tabTarget}`
+          : filledCount === 0
+            ? `Failed to fill any ${fieldWord}${tabTarget}`
+            : `filled ${filledCount} of ${actualFieldCount} ${fieldWord}${tabTarget}`
+
       if (filledCount === actualFieldCount) {
         console.log(`✅ ${summaryMsg}`)
       } else {

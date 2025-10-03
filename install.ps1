@@ -22,12 +22,12 @@ try {
 if ($IsWindows -or $env:OS -eq "Windows_NT") {
     $INSTALL_DIR = "$env:LOCALAPPDATA\Programs\playwright-cli"
     $CLAUDE_DIR = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { "$env:USERPROFILE\.claude" }
-    $BINARY_NAME = "playwright.exe"
+    $BINARY_NAME = "pw.exe"
 } else {
     # Unix/macOS paths
     $INSTALL_DIR = "$HOME/.local/bin"
     $CLAUDE_DIR = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { "$HOME/.claude" }
-    $BINARY_NAME = "playwright"
+    $BINARY_NAME = "pw"
 }
 
 # Create directories
@@ -74,10 +74,10 @@ if (-not (Test-Path $binaryPath)) {
 Write-Host "✅ Build complete" -ForegroundColor Green
 
 # Stop any running instances before installation
-$runningProcesses = Get-Process -Name "playwright" -ErrorAction SilentlyContinue
+$runningProcesses = Get-Process -Name "pw" -ErrorAction SilentlyContinue
 if ($runningProcesses) {
-    Write-Host "  Stopping running playwright instances..." -ForegroundColor Yellow
-    Stop-Process -Name "playwright" -Force -ErrorAction SilentlyContinue
+    Write-Host "  Stopping running pw instances..." -ForegroundColor Yellow
+    Stop-Process -Name "pw" -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 500
 }
 
@@ -93,18 +93,18 @@ $binaryInstalled = Join-Path $INSTALL_DIR $BINARY_NAME
 try {
     $versionOutput = & $binaryInstalled --version 2>$null
     if ($versionOutput) {
-        Write-Host "✅ playwright binary works (version: $versionOutput)" -ForegroundColor Green
+        Write-Host "✅ pw binary works (version: $versionOutput)" -ForegroundColor Green
     } else {
         # Try help command as fallback
         $helpOutput = & $binaryInstalled help 2>$null
         if ($helpOutput) {
-            Write-Host "✅ playwright binary works" -ForegroundColor Green
+            Write-Host "✅ pw binary works" -ForegroundColor Green
         } else {
-            Write-Host "⚠️  playwright binary may have issues - please test manually" -ForegroundColor Yellow
+            Write-Host "⚠️  pw binary may have issues - please test manually" -ForegroundColor Yellow
         }
     }
 } catch {
-    Write-Host "⚠️  playwright binary may have issues - please test manually" -ForegroundColor Yellow
+    Write-Host "⚠️  pw binary may have issues - please test manually" -ForegroundColor Yellow
 }
 
 # Update CLAUDE.md
@@ -143,25 +143,25 @@ if (Test-Path $CLAUDE_MD) {
         $content += $instructions
     } else {
         # Fallback minimal content if file not found
-        $content += "## Playwright CLI`nBrowser automation tool. Run 'playwright claude' for documentation."
+        $content += "## Playwright CLI`nBrowser automation tool. Run 'pw --help' for documentation."
     }
-    
+
     $content += "`n<!-- END PLAYWRIGHT-CLI -->"
-    
+
     # Write back with a trailing newline
     Set-Content -Path $CLAUDE_MD -Value $content
     Write-Host "✅ Updated CLAUDE.md" -ForegroundColor Green
 } else {
     # Create new file from CLAUDE_INSTRUCTIONS.md
     $content = "<!-- BEGIN PLAYWRIGHT-CLI -->`n"
-    
+
     $instructionsPath = Join-Path $SCRIPT_DIR "CLAUDE_INSTRUCTIONS.md"
     if (Test-Path $instructionsPath) {
         $instructions = Get-Content $instructionsPath -Raw
         $content += $instructions
     } else {
         # Fallback minimal content if file not found
-        $content += "## Playwright CLI`nBrowser automation tool. Run 'playwright claude' for documentation."
+        $content += "## Playwright CLI`nBrowser automation tool. Run 'pw --help' for documentation."
     }
     
     $content += "`n<!-- END PLAYWRIGHT-CLI -->"
@@ -187,5 +187,5 @@ if ($userPath -notlike "*$INSTALL_DIR*") {
 Write-Host ""
 Write-Host "✅ Installation complete!" -ForegroundColor Green
 Write-Host ""
-Write-Host "Run 'playwright' to see all available commands" -ForegroundColor Cyan
+Write-Host "Run 'pw' to see all available commands" -ForegroundColor Cyan
 Write-Host "Note: You may need to restart your terminal for PATH changes to take effect" -ForegroundColor Yellow

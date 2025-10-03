@@ -181,11 +181,6 @@ export class Validators {
       }
 
       // Basic CSS selector validation
-      // Allow ref format [ref=abcd1234]
-      const refPattern = /^\[ref=[a-f0-9]+\]$/
-      if (refPattern.test(selector)) {
-        return { isValid: true, errors: [], sanitizedValue: selector }
-      }
 
       // Since we're in Node.js environment, we can't validate CSS selectors
       // using the DOM API. We'll do basic validation and let the browser
